@@ -46,6 +46,24 @@ som "mellan hållplats A och B, 40 % av vägen" och läggs sedan ut på kartan:
    mellan de två senaste lägena. Ingen vagn hoppar eller backar.
 5. Turer utan realtid går efter tidtabellen, som ger A, B och andelen direkt.
 
+## Västtrafiks API i praktiken
+
+Uppmätt med `scripts/check.sh` en måndagskväll kl. 23.50:
+
+- 41–50 spårvagnar i trafik på 13 linjer (1–12 och X). Allihop ryms i ett
+  anrop, men dagtid är det fler, så fyra rutor används ändå.
+- Varje position har linje, destination, Västtrafiks linjefärger och en
+  turreferens. Riktning eller fart saknas.
+- Positionerna ändras i steg, inte vid varje anrop. Efter 5 och 10 sekunder
+  hade samma 32 av 50 vagnar flyttat sig, efter 20 sekunder 44. Var 5:e
+  sekund räcker gott.
+- Turdetaljerna (`includes=servicejourneycalls`) ger alla hållplatser med
+  koordinater och planerade och beräknade tider. `servicejourneycoordinates`
+  ger turens geometri, men gles: 46 punkter på 15 hållplatser.
+- Inga kvotuppgifter i svaren. Token gäller ett dygn.
+- `isRealtimeJourney` var falskt för alla vagnar och beräknade tider var
+  lika med planerade. Kollas igen dagtid.
+
 ## Fas 0: konton
 
 Båda är gratis. Nycklarna hamnar i `.env`, som aldrig committas.
