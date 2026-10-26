@@ -7,7 +7,7 @@
 #   ./scripts/check.sh
 #
 # GTFS-filen sparas i data/ (gitignorerad) och hämtas högst en gång i veckan
-# av det här skriptet; Trafiklabs gratisnivå tillåter 50 hämtningar i månaden.
+# av det här skriptet; Trafiklabs gratisnivå tillåter 60 hämtningar på 30 dagar.
 # Python körs i Docker, i samma image som familjesidan i rahbari, så inget
 # installeras på Macen.
 set -euo pipefail

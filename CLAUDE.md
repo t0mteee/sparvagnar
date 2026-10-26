@@ -36,6 +36,6 @@ en Claude-session som kör i den här mappen på servern.
 - Layouten är vår egen. Rita inte av Västtrafiks linjenätskarta.
 - Servern skrivs i Python med bara standardbiblioteket, som familjesidan i
   rahbari. Nycklarna stannar i containern.
-- Hushåll med anropen: Trafiklab tillåter 50 hämtningar av tidtabellen i
-  månaden. Västtrafiks positioner hämtas bara medan någon har sidan öppen.
+- Hushåll med anropen: Trafiklab tillåter 60 hämtningar av tidtabellen på
+  30 dagar. Västtrafiks positioner hämtas bara medan någon har sidan öppen.
 - Committa och pusha efter varje avklarad fas.

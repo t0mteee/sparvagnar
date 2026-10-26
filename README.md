@@ -94,8 +94,8 @@ cp .env.example .env
    project".
 4. Kopiera nyckeln till `.env` som `TRAFIKLAB_KEY`.
 
-Gratisnivån tillåter 50 hämtningar av tidtabellen i månaden. Kartan hämtar en
-per dygn.
+Gratisnivån tillåter 60 hämtningar av tidtabellen på 30 dagar. Kartan hämtar
+en per dygn.
 
 ### Kontrollera
 
