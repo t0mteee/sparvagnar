@@ -49,6 +49,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--display); o
 .status { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 15px; color: var(--muted); }
 .status b { color: var(--signal); font-family: var(--mono); font-weight: 600; font-size: 14px; }
 .lage { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal); }
+.topp.spelar .klocka { color: var(--signal); }
+.uppspelning { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--rule); font-size: 15px; color: var(--muted); }
+.uppspelning b { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--text); }
+.uppspelning button { min-height: 30px; padding: 3px 10px; }
 
 .styr {
   left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
@@ -107,6 +111,7 @@ button[aria-pressed="true"] { background: var(--signal); color: #1a1205; border-
     <h1>Spårvagnar i Göteborg</h1>
     <div class="klocka" id="klocka">--:--:--</div>
     <div class="status"><span><b id="antal">0</b> vagnar i trafik</span><span class="lage" id="lage">Tidtabell</span></div>
+    <div class="uppspelning" id="uppspelning" hidden>Klockan är egentligen <b id="riktig">--:--</b><button id="tillbaka">Tillbaka till nu</button></div>
   </header>
 
   <section class="panel kort" id="kort" hidden aria-live="polite">
@@ -210,9 +215,13 @@ button[aria-pressed="true"] { background: var(--signal); color: #1a1205; border-
   function knappar() {
     document.getElementById("nu").setAttribute("aria-pressed", klocka.foljer);
     document.querySelectorAll(".fart").forEach(b => b.setAttribute("aria-pressed", String(!klocka.foljer && +b.dataset.fart === klocka.fart)));
-    document.getElementById("lage").textContent = klocka.foljer ? "Tidtabell, nu" : klocka.fart === 0 ? "Pausad" : klocka.fart === 1 ? "Tidtabell" : `Tidtabell ${klocka.fart}×`;
+    document.getElementById("lage").textContent = klocka.foljer ? "Nu, enligt tidtabell" : klocka.fart === 0 ? "Pausad" : `Uppspelning ${klocka.fart}×`;
+    document.querySelector(".topp").classList.toggle("spelar", !klocka.foljer);
+    document.getElementById("uppspelning").hidden = klocka.foljer;
   }
-  document.getElementById("nu").onclick = () => { klocka.foljer = true; knappar(); };
+  const tillNu = () => { klocka.foljer = true; knappar(); };
+  document.getElementById("nu").onclick = tillNu;
+  document.getElementById("tillbaka").onclick = tillNu;
   document.querySelectorAll(".fart").forEach(b => b.onclick = () => stall(nu(), +b.dataset.fart));
   tidReglage.oninput = () => stall(+tidReglage.value, klocka.foljer ? 1 : klocka.fart || 1);
   document.getElementById("rusning").onclick = () => stall(7 * 3600 + 45 * 60, 10);
@@ -362,6 +371,7 @@ button[aria-pressed="true"] { background: var(--signal); color: #1a1205; border-
     }
     ctx.globalAlpha = 1;
     klockEl.textContent = tidSek(t);
+    if (!klocka.foljer) document.getElementById("riktig").textContent = tid(stockholmNu());
     antalEl.textContent = antal;
     tips.hidden = antal >= 12;
     if (document.activeElement !== tidReglage) tidReglage.value = Math.floor(t);
