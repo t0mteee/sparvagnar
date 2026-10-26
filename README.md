@@ -6,16 +6,45 @@ Körs i Docker på en hemmaserver och nås på http://localhost:8125.
 
 ## Faser
 
-- **Fas 0, nu:** konton och nycklar hos Västtrafik och Trafiklab.
-- **Fas 1, linjekartan:** layouten genereras ur tidtabellen och ritas i
-  webbläsaren. Linjer och hållplatser, inga vagnar än.
-- **Fas 2, vagnar enligt tidtabell:** alla vagnar rör sig som de ska enligt
-  tidtabellen. Inga realtidsanrop.
-- **Fas 3, realtid:** Västtrafiks positioner var 5:e sekund, bara medan någon
-  har sidan öppen.
-- **Fas 4, filmkänslan:** mörkt kontrollrumsutseende, klick på en vagn
-  (linje, destination, försening, nästa hållplats), störningar, helskärm för
-  TV:n.
+- **Fas 0, klar:** konton och nycklar hos Västtrafik och Trafiklab.
+- **Fas 1, klar:** layouten genereras ur tidtabellen med LOOM och ritas i
+  webbläsaren. Finjustering för hand återstår.
+- **Fas 2, klar:** alla vagnar rör sig enligt tidtabellen, med uppspelning i
+  10× och 60×.
+- **Fas 3, klar att köra på servern:** Västtrafiks positioner var 5:e sekund,
+  bara medan någon har sidan öppen, kopplade till turerna med försening.
+- **Fas 4, filmkänslan:** delvis gjord (mörkt utseende, klick på vagn,
+  försenade vagnar med ring). Kvar: störningar, helskärm för TV:n.
+
+## Köra på servern
+
+```
+git clone https://github.com/t0mteee/sparvagnar.git
+cd sparvagnar
+cp .env.example .env       # fyll i de tre nycklarna
+./scripts/check.sh         # port, nycklar och tidtabell
+docker compose up -d
+```
+
+Sidan finns sedan på http://localhost:8125, och från andra enheter på
+hemmanätet på samma port med serverns namn. Första starten hämtar
+tidtabellen och bygger dagens turer, vilket tar en eller ett par minuter;
+sidan väntar och säger till under tiden. Läget syns på `/api/status`.
+
+Servern (`server/`) är Python med bara standardbiblioteket:
+
+- `tidtabell.py` hämtar Västtrafiks GTFS från Trafiklab högst en gång per
+  dygn och bygger dagens spårvagnsturer, cachade i `data/`.
+- `realtid.py` hämtar positionerna och kopplar varje vagn till sin tur: samma
+  linje och skylt, och den tur där positionen ligger längs spåret närmast i
+  tid. Skillnaden blir vagnens försening.
+- `server.py` serverar sidan (`web/index.html`), kartan (`layout/karta.svg`)
+  och tre API-anrop: `/api/dag`, `/api/live` och `/api/status`.
+
+Sidan visar varje vagn som sin tur, förskjuten med förseningen. Ändras
+förseningen glider vagnen ikapp eller stannar en stund, men backar aldrig.
+Vagnar som inte går att koppla till en tur visas som en ring vid närmaste
+hållplats.
 
 ## Linjekartan
 
@@ -28,9 +57,11 @@ schematisk karta:
 gtfs2graph -m tram vt.zip | topo | loom | octi
 ```
 
-Resultatet är en GeoJSON med hållplatser och linjesträckor, som checkas in och
-finjusteras för hand där det behövs (namnplacering, raka huvudstråk). Den görs
-om bara när linjenätet ändras.
+Resultatet ligger i `layout/`: LOOM:s graf (`octi.json`), kartan som
+transitmap ritar den (`karta.svg`) och vagnarnas vägar längs varje linje
+mellan hållplatserna (`layout.json`). Servern läser bara det, så varken LOOM
+eller transitmap behövs på servern. Görs om med `verktyg/bygg_layout.py` när
+linjenätet ändras. Tidtabellsdatan från Trafiklab är CC0.
 
 ## Så rör sig vagnarna
 

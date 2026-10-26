@@ -6,10 +6,10 @@ en Claude-session som kör i den här mappen på servern.
 
 ## Läge
 
-- Fas 0 klar: båda nycklarna fungerar, se "i praktiken" i README.md. På Macen
-  ska de in i `.env`. Kontrollera med `./scripts/check.sh`.
-- Fas 1 pågår: en första prototyp finns i `poc/` (layout med LOOM, vagnar
-  enligt tidtabell). Se `poc/README.md` för hur den byggs och vad som brister.
+- Fas 0–3 är byggda och testade i en molnsession: tidtabell, layout och
+  realtid. Nästa steg är att köra det på servern (README.md, "Köra på
+  servern") och kontrollera att vagnarna stämmer dagtid.
+- `poc/` är den första prototypen, publicerad som en fristående sida.
 
 ## Servern
 
@@ -25,6 +25,9 @@ en Claude-session som kör i den här mappen på servern.
 ## Kommandon
 
 - Kontroll av port, nycklar och tidtabell: `./scripts/check.sh`
+- Starta: `docker compose up -d`. Efter `git pull`: `docker compose restart sparvagnar`
+- Logg: `docker compose logs -f sparvagnar`
+- Läge: `curl -s localhost:8125/api/status`
 - LOOM för layouten: `docker build -t loom https://github.com/ad-freiburg/loom.git`,
   sedan `docker run -i loom <verktyg>`.
 

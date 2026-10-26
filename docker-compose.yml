@@ -1,0 +1,30 @@
+# Spårvagnskartan på servern, helt skild från Home Assistant i rahbari.
+#
+#   Starta:   docker compose up -d
+#   Sidan:    http://localhost:8125 (PORT i .env)
+#   Logg:     docker compose logs -f sparvagnar
+#   Läge:     curl -s localhost:8125/api/status
+#
+# Koden läses direkt från repot, det finns inget byggsteg: efter git pull
+# räcker docker compose restart sparvagnar. Tidtabellen och dagens cache
+# hamnar i data/ (gitignorerad).
+
+services:
+  sparvagnar:
+    container_name: sparvagnar
+    image: python:3.12-alpine
+    restart: unless-stopped
+    working_dir: /app
+    command: ["python", "-u", "server/server.py"]
+    ports:
+      - "${PORT:-8125}:8125"
+    environment:
+      DATA: /data
+      VASTTRAFIK_KEY: ${VASTTRAFIK_KEY:-}
+      VASTTRAFIK_SECRET: ${VASTTRAFIK_SECRET:-}
+      TRAFIKLAB_KEY: ${TRAFIKLAB_KEY:-}
+    volumes:
+      - ./server:/app/server:ro
+      - ./web:/app/web:ro
+      - ./layout:/app/layout:ro
+      - ./data:/data
