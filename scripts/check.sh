@@ -141,8 +141,10 @@ def gtfs():
             yield from csv.DictReader(io.TextIOWrapper(f, "utf-8-sig"))
 
     feed = next(rader("feed_info.txt"), {}) if "feed_info.txt" in namn else {}
+    dagar = [(r["start_date"], r["end_date"]) for r in rader("calendar.txt")] if "calendar.txt" in namn else []
+    giltig = f", trafik {min(d[0] for d in dagar)} till {max(d[1] for d in dagar)}" if dagar else ""
     print(f"Trafiklab: GTFS {os.path.getsize(path) // 1_000_000} MB, "
-          f"gäller {feed.get('feed_start_date', '?')} till {feed.get('feed_end_date', '?')}.")
+          f"version {feed.get('feed_version', '?')}{giltig}.")
 
     linjer = {r["route_id"]: r for r in rader("routes.txt") if r["route_type"] in SPARVAGN}
     if not linjer:
@@ -159,8 +161,10 @@ def gtfs():
     print(f"  {len(linjer)} spårvagnslinjer, {sum(turer.values())} turer i filen:")
     for rid, r in sorted(linjer.items(), key=lambda x: linjeordning(x[1].get("route_short_name", ""))):
         farg = f", färg #{r['route_color']}" if r.get("route_color") else ""
-        print(f"    {r.get('route_short_name', '?'):>4} {r.get('route_long_name', '')[:40]:40} "
-              f"{turer[rid]:6} turer{farg}")
+        langt = f"  {r['route_long_name'][:40]}" if r.get("route_long_name") else ""
+        print(f"    {r.get('route_short_name', '?'):>4} {turer[rid]:6} turer{farg}{langt}")
+    if not any(r.get("route_color") for r in linjer.values()):
+        print("  Linjefärgerna saknas i GTFS. De tas från Västtrafik.")
 
     if "shapes.txt" not in namn:
         print("  Spårgeometri: shapes.txt saknas. Geometrin får hämtas från Västtrafik i stället.")

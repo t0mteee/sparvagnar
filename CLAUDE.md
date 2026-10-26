@@ -6,8 +6,8 @@ en Claude-session som kör i den här mappen på servern.
 
 ## Läge
 
-- Fas 0 pågår. Västtrafiks nyckel fungerar (se "Västtrafiks API i praktiken"
-  i README.md), Trafiklabs återstår. Kontrollera med `./scripts/check.sh`.
+- Fas 0 klar: båda nycklarna fungerar, se "i praktiken" i README.md. På Macen
+  ska de in i `.env`. Kontrollera med `./scripts/check.sh`.
 - Nästa: fas 1, linjekartan.
 
 ## Servern

@@ -64,6 +64,19 @@ Uppmätt med `scripts/check.sh` en måndagskväll kl. 23.50:
 - `isRealtimeJourney` var falskt för alla vagnar och beräknade tider var
   lika med planerade. Kollas igen dagtid.
 
+## Tidtabellen i praktiken
+
+Västtrafiks GTFS från Trafiklab, version 2026-10-26 med trafik till juni 2027:
+
+- 96 MB packad. 15 spårvagnslinjer: 1–13 och två X-linjer (extravagnar).
+  Linje 13 har bara 55 turer.
+- Spårgeometri finns för alla turer: 500 former med 160 000 punkter, och
+  `stop_times.txt` anger avståndet längs spåret vid varje hållplats. Det är
+  precis vad "mellan A och B" behöver.
+- Linjefärger och långa linjenamn saknas. Färgerna tas från Västtrafik.
+- `shapes.txt` och `stop_times.txt` är runt 280 MB var uppackade, så servern
+  plockar ut spårvagnarna en gång per hämtning och sparar ett litet utdrag.
+
 ## Fas 0: konton
 
 Båda är gratis. Nycklarna hamnar i `.env`, som aldrig committas.
