@@ -1,0 +1,6 @@
+# Lokalt
+.env
+.DS_Store
+
+# Nedladdad tidtabellsdata
+data/
