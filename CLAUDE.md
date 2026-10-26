@@ -8,7 +8,8 @@ en Claude-session som kör i den här mappen på servern.
 
 - Fas 0 klar: båda nycklarna fungerar, se "i praktiken" i README.md. På Macen
   ska de in i `.env`. Kontrollera med `./scripts/check.sh`.
-- Nästa: fas 1, linjekartan.
+- Fas 1 pågår: en första prototyp finns i `poc/` (layout med LOOM, vagnar
+  enligt tidtabell). Se `poc/README.md` för hur den byggs och vad som brister.
 
 ## Servern
 

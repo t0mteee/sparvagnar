@@ -1,0 +1,378 @@
+<title>Spårvagnskartan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Martian+Mono:wght@400;600&display=swap">
+<style>
+/* Kontrollrum: kartan fyller skärmen, instrumenten flyter ovanpå i hörnen. */
+:root {
+  --bg: #0b1016;
+  --panel: rgba(16, 23, 31, 0.88);
+  --rule: #223040;
+  --text: #dce5ee;
+  --muted: #8395a7;
+  --signal: #ffb547;
+  --station: #e4ebf2;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--text); font-family: var(--display); overflow: hidden; }
+.app { position: relative; height: 100%; overflow: hidden; }
+#karta { position: absolute; inset: 0; touch-action: none; cursor: grab; }
+#karta.drar { cursor: grabbing; }
+#karta svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#vagnar { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* transitmaps karta, omfärgad för mörk bakgrund */
+#karta .transit-edge-outline, #karta .inner-geom-outline { stroke: var(--bg) !important; }
+#karta .transit-edge-outline.L-11, #karta .inner-geom-outline.L-11 { stroke: #7b8a99 !important; stroke-width: 6.6 !important; }
+#karta .station-poly { fill: var(--station); stroke: var(--bg); stroke-width: 0.8; }
+#karta .station-label { fill: #a7b6c4; font-family: var(--display); font-weight: 600; }
+#karta .line-label { font-family: var(--display); }
+#karta .L { transition: opacity 0.25s; }
+
+.panel {
+  position: absolute; z-index: 2;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.topp {
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: max(12px, env(safe-area-inset-left, 0px));
+  padding: 10px 14px 12px; display: grid; gap: 2px; min-width: 0; max-width: calc(100% - 24px);
+}
+.topp h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.klocka { font-family: var(--mono); font-size: 34px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.status { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 15px; color: var(--muted); }
+.status b { color: var(--signal); font-family: var(--mono); font-weight: 600; font-size: 14px; }
+.lage { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal); }
+
+.styr {
+  left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  padding: 10px 12px; display: grid; gap: 10px;
+}
+.rad { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button {
+  font: inherit; font-size: 15px; font-weight: 600; color: var(--text);
+  background: #182230; border: 1px solid var(--rule); border-radius: 4px;
+  padding: 6px 11px; cursor: pointer; min-height: 34px;
+}
+button:hover { border-color: #3a4c60; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--signal); color: #1a1205; border-color: var(--signal); }
+.fart { font-family: var(--mono); font-size: 13px; }
+#tid { flex: 1 1 160px; min-width: 0; accent-color: var(--signal); }
+.linjer { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  min-width: 34px; padding: 4px 8px; font-family: var(--display); font-size: 16px; font-weight: 700;
+  border: 2px solid transparent; border-radius: 4px; line-height: 1.2; min-height: 30px;
+}
+.chip[aria-pressed="true"] { border-color: var(--signal); }
+.chip.dimmad { opacity: 0.35; }
+.tips { font-size: 14px; color: var(--muted); }
+.tips button { margin-left: 6px; }
+
+.kort {
+  top: calc(env(safe-area-inset-top, 0px) + 12px); right: max(12px, env(safe-area-inset-right, 0px));
+  width: min(300px, calc(100% - 24px)); padding: 12px 14px; display: grid; gap: 6px;
+}
+.kort .huvud { display: flex; align-items: center; gap: 10px; }
+.bricka { font-size: 22px; font-weight: 700; min-width: 40px; text-align: center; padding: 2px 8px; border-radius: 4px; }
+.kort .mot { font-size: 20px; font-weight: 600; line-height: 1.15; min-width: 0; }
+.kort .rader { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 16px; }
+.kort .rader dt { color: var(--muted); }
+.kort .rader dd { margin: 0; font-variant-numeric: tabular-nums; }
+.kort .rader dd span { font-family: var(--mono); font-size: 13px; color: var(--signal); }
+.kort .stang { position: absolute; top: 6px; right: 6px; min-height: 28px; padding: 2px 8px; }
+.kalla { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+@media (max-width: 640px) {
+  .kort { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); left: max(12px, env(safe-area-inset-left, 0px)); width: auto; z-index: 3; }
+  .klocka { font-size: 28px; }
+}
+@media (max-height: 520px) { .kalla { display: none; } }
+</style>
+
+<div class="app">
+  <div id="karta" aria-label="Schematisk karta över Göteborgs spårvagnsnät">
+    __SVG__
+    <canvas id="vagnar"></canvas>
+  </div>
+
+  <header class="panel topp">
+    <h1>Spårvagnar i Göteborg</h1>
+    <div class="klocka" id="klocka">--:--:--</div>
+    <div class="status"><span><b id="antal">0</b> vagnar i trafik</span><span class="lage" id="lage">Tidtabell</span></div>
+  </header>
+
+  <section class="panel kort" id="kort" hidden aria-live="polite">
+    <button class="stang" id="stang" aria-label="Stäng">✕</button>
+    <div class="huvud"><span class="bricka" id="k-linje">6</span><span class="mot" id="k-mot">mot …</span></div>
+    <dl class="rader">
+      <dt id="k-nu-etikett">Nästa</dt><dd id="k-nu">…</dd>
+      <dt>Turen</dt><dd id="k-tur">…</dd>
+    </dl>
+  </section>
+
+  <section class="panel styr" aria-label="Tid och linjer">
+    <div class="rad">
+      <button id="nu" aria-pressed="true">Nu</button>
+      <button class="fart" data-fart="0" aria-label="Paus">❚❚</button>
+      <button class="fart" data-fart="1">1×</button>
+      <button class="fart" data-fart="10">10×</button>
+      <button class="fart" data-fart="60">60×</button>
+      <input type="range" id="tid" min="0" max="86399" step="60" aria-label="Tid på dygnet">
+    </div>
+    <div class="tips" id="tips" hidden>Nästan inga vagnar ute nu.<button id="rusning">Hoppa till 07:45</button></div>
+    <div class="linjer" id="linjer" aria-label="Markera en linje"></div>
+    <div class="kalla" id="kalla"></div>
+  </section>
+</div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const karta = document.getElementById("karta");
+  const svg = karta.querySelector("svg");
+  const canvas = document.getElementById("vagnar");
+  const ctx = canvas.getContext("2d");
+  const [W, H] = D.storlek;
+  svg.removeAttribute("width"); svg.removeAttribute("height");
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  // Vägarna mellan hållplatser, med ackumulerad längd för interpolering.
+  const hopp = D.hopp.map(p => {
+    const n = p.length / 2, acc = new Float64Array(n);
+    for (let i = 1; i < n; i++) acc[i] = acc[i - 1] + Math.hypot(p[2*i] - p[2*i-2], p[2*i+1] - p[2*i-1]);
+    return { p, acc, len: acc[n - 1] };
+  });
+  function punktPa(h, f) {
+    const mal = h.len * f, a = h.acc, p = h.p;
+    let lo = 0, hi = a.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (a[m] <= mal) lo = m; else hi = m; }
+    const seg = a[hi] - a[lo] || 1, t = (mal - a[lo]) / seg;
+    return [p[2*lo] + (p[2*hi] - p[2*lo]) * t, p[2*lo+1] + (p[2*hi+1] - p[2*lo+1]) * t];
+  }
+
+  // Turerna: ankomst- och avgångstider i sekunder efter midnatt.
+  const turer = D.turer.map(([linje, mot, start, h, stopp, d]) => {
+    const n = stopp.length, ank = new Float64Array(n), avg = new Float64Array(n);
+    let forra = start;
+    for (let i = 0; i < n; i++) { ank[i] = forra + d[2*i]; avg[i] = ank[i] + d[2*i+1]; forra = avg[i]; }
+    return { linje, mot, h, stopp, ank, avg, start: avg[0], slut: ank[n - 1] };
+  });
+
+  const linjer = D.linjer;
+  const tid = s => { s = ((Math.round(s) % 86400) + 86400) % 86400;
+    return [s / 3600 | 0, (s / 60 | 0) % 60].map(v => String(v).padStart(2, "0")).join(":"); };
+  const tidSek = s => { s = ((Math.floor(s) % 86400) + 86400) % 86400;
+    return [s / 3600 | 0, (s / 60 | 0) % 60, s % 60].map(v => String(v).padStart(2, "0")).join(":"); };
+  const mjuk = f => f * f * (3 - 2 * f);
+
+  // Läget för en tur vid tiden t: punkt, och vilken hållplats den står vid eller är på väg till.
+  function lage(tur, t) {
+    if (t < tur.start || t > tur.slut) return null;
+    const { ank, avg, h } = tur, n = ank.length;
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ank[m] <= t) lo = m; else hi = m; }
+    if (t < avg[lo] || lo === n - 1) {             // står vid hållplats lo
+      const hi_ = lo > 0 ? h[lo - 1] : h[lo];
+      if (hi_ < 0) return null;
+      const hh = hopp[hi_];
+      return { xy: punktPa(hh, lo > 0 ? 1 : 0), star: lo };
+    }
+    if (h[lo] < 0) return null;                    // på väg från lo till lo+1
+    const f = (t - avg[lo]) / Math.max(1, ank[lo + 1] - avg[lo]);
+    return { xy: punktPa(hopp[h[lo]], mjuk(Math.min(1, Math.max(0, f)))), mot: lo + 1 };
+  }
+
+  // Klockan: Göteborgstid, eller simulerad tid med egen fart.
+  const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+  function stockholmNu() {
+    const p = Object.fromEntries(fmt.formatToParts(new Date()).map(x => [x.type, x.value]));
+    return +p.hour * 3600 + +p.minute * 60 + +p.second + (Date.now() % 1000) / 1000;
+  }
+  const klocka = { bas: stockholmNu(), ankare: performance.now(), fart: 1, foljer: true };
+  function nu() {
+    if (klocka.foljer) return stockholmNu();
+    return (((klocka.bas + (performance.now() - klocka.ankare) / 1000 * klocka.fart) % 86400) + 86400) % 86400;
+  }
+  function stall(bas, fart) {
+    klocka.bas = bas; klocka.ankare = performance.now(); klocka.fart = fart; klocka.foljer = false;
+    knappar();
+  }
+  const tidReglage = document.getElementById("tid");
+  function knappar() {
+    document.getElementById("nu").setAttribute("aria-pressed", klocka.foljer);
+    document.querySelectorAll(".fart").forEach(b => b.setAttribute("aria-pressed", String(!klocka.foljer && +b.dataset.fart === klocka.fart)));
+    document.getElementById("lage").textContent = klocka.foljer ? "Tidtabell, nu" : klocka.fart === 0 ? "Pausad" : klocka.fart === 1 ? "Tidtabell" : `Tidtabell ${klocka.fart}×`;
+  }
+  document.getElementById("nu").onclick = () => { klocka.foljer = true; knappar(); };
+  document.querySelectorAll(".fart").forEach(b => b.onclick = () => stall(nu(), +b.dataset.fart));
+  tidReglage.oninput = () => stall(+tidReglage.value, klocka.foljer ? 1 : klocka.fart || 1);
+  document.getElementById("rusning").onclick = () => stall(7 * 3600 + 45 * 60, 10);
+
+  // Linjerna som chips; ett tryck markerar linjen.
+  let markerad = null;
+  const stil = document.createElement("style"); document.head.appendChild(stil);
+  const linjeRad = document.getElementById("linjer");
+  linjer.forEach((l, i) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = l.namn; b.style.background = l.farg; b.style.color = l.text;
+    if (l.namn === "11") b.style.boxShadow = "inset 0 0 0 1px #7b8a99";
+    b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Linje " + l.namn);
+    b.onclick = () => { markerad = markerad === i ? null : i; markera(); };
+    linjeRad.appendChild(b);
+  });
+  function markera() {
+    [...linjeRad.children].forEach((b, i) => {
+      b.setAttribute("aria-pressed", String(markerad === i));
+      b.classList.toggle("dimmad", markerad !== null && markerad !== i);
+    });
+    stil.textContent = markerad === null ? "" :
+      `#karta .L:not(.L-${CSS.escape(linjer[markerad].namn)}) { opacity: 0.13; }`;
+  }
+
+  // Vy: panorera och zooma med viewBox; vagnarna ritas på canvas i samma koordinater.
+  const vy = { x: 0, y: 0, k: 1 };
+  let bredd = 0, hojd = 0, minK = 1;
+  function storlek() {
+    const r = karta.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const forraB = bredd, forraH = hojd;
+    bredd = r.width; hojd = r.height;
+    canvas.width = Math.round(bredd * dpr); canvas.height = Math.round(hojd * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    minK = Math.min(bredd / W, hojd / H) * 0.95;
+    if (!forraB) { // första gången: centrala Göteborg i bild
+      const k = Math.max(minK, Math.min(bredd / 1250, hojd / 1250));
+      vy.k = k; vy.x = 1450 - bredd / 2 / k; vy.y = 1950 - hojd / 2 / k;
+    } else { vy.x += (forraB - bredd) / 2 / vy.k; vy.y += (forraH - hojd) / 2 / vy.k; }
+    tillampa();
+  }
+  function tillampa() {
+    vy.k = Math.max(minK, Math.min(minK * 40, vy.k));
+    svg.setAttribute("viewBox", `${vy.x} ${vy.y} ${bredd / vy.k} ${hojd / vy.k}`);
+  }
+  function zooma(faktor, sx, sy) {
+    const k2 = Math.max(minK, Math.min(minK * 40, vy.k * faktor));
+    vy.x += sx / vy.k - sx / k2; vy.y += sy / vy.k - sy / k2; vy.k = k2; tillampa();
+  }
+  window.addEventListener("resize", storlek);
+
+  const pekare = new Map();
+  let flyttat = 0, nyp = null;
+  karta.addEventListener("pointerdown", e => {
+    karta.setPointerCapture(e.pointerId); pekare.set(e.pointerId, [e.clientX, e.clientY]);
+    flyttat = 0; karta.classList.add("drar");
+    if (pekare.size === 2) { const [a, b] = [...pekare.values()]; nyp = Math.hypot(a[0] - b[0], a[1] - b[1]); }
+  });
+  karta.addEventListener("pointermove", e => {
+    if (!pekare.has(e.pointerId)) return;
+    const forra = pekare.get(e.pointerId); pekare.set(e.pointerId, [e.clientX, e.clientY]);
+    const r = karta.getBoundingClientRect();
+    if (pekare.size === 1) {
+      flyttat += Math.abs(e.clientX - forra[0]) + Math.abs(e.clientY - forra[1]);
+      vy.x -= (e.clientX - forra[0]) / vy.k; vy.y -= (e.clientY - forra[1]) / vy.k; tillampa();
+    } else if (pekare.size === 2) {
+      flyttat += 10;
+      const [a, b] = [...pekare.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (nyp) zooma(d / nyp, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top);
+      nyp = d;
+    }
+  });
+  const slapp = e => {
+    if (pekare.size === 1 && flyttat < 6) tryck(e);
+    pekare.delete(e.pointerId); if (pekare.size < 2) nyp = null;
+    if (!pekare.size) karta.classList.remove("drar");
+  };
+  karta.addEventListener("pointerup", slapp);
+  karta.addEventListener("pointercancel", e => { pekare.delete(e.pointerId); nyp = null; karta.classList.remove("drar"); });
+  karta.addEventListener("wheel", e => {
+    e.preventDefault(); const r = karta.getBoundingClientRect();
+    zooma(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  // Tryck på en vagn visar kortet.
+  let vald = null, synliga = [];
+  const kort = document.getElementById("kort");
+  function tryck(e) {
+    const r = karta.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+    let bast = null, bd = 22;
+    for (const v of synliga) { const d = Math.hypot(v.sx - sx, v.sy - sy); if (d < bd) { bd = d; bast = v.tur; } }
+    vald = bast; kort.hidden = !vald; if (vald) visaKort(nu());
+  }
+  document.getElementById("stang").onclick = () => { vald = null; kort.hidden = true; };
+  function visaKort(t) {
+    const tur = vald, l = linjer[tur.linje], b = document.getElementById("k-linje");
+    b.textContent = l.namn; b.style.background = l.farg; b.style.color = l.text;
+    b.style.boxShadow = l.namn === "11" ? "inset 0 0 0 1px #7b8a99" : "none";
+    document.getElementById("k-mot").textContent = "mot " + D.namn[tur.mot];
+    const lg = lage(tur, t);
+    if (!lg) { document.getElementById("k-nu-etikett").textContent = "Status"; document.getElementById("k-nu").textContent = "Inte i trafik just nu"; }
+    else if (lg.star !== undefined) {
+      document.getElementById("k-nu-etikett").textContent = "Står vid";
+      document.getElementById("k-nu").innerHTML = `${D.namn[tur.stopp[lg.star]] ?? "?"} <span>avg ${tid(tur.avg[lg.star])}</span>`;
+    } else {
+      document.getElementById("k-nu-etikett").textContent = "Nästa";
+      document.getElementById("k-nu").innerHTML = `${D.namn[tur.stopp[lg.mot]] ?? "?"} <span>${tid(tur.ank[lg.mot])}</span>`;
+    }
+    document.getElementById("k-tur").innerHTML = `${D.namn[tur.stopp[0]] ?? "?"} <span>${tid(tur.start)}–${tid(tur.slut)}</span>`;
+  }
+
+  // Ritslingan.
+  const klockEl = document.getElementById("klocka"), antalEl = document.getElementById("antal"), tips = document.getElementById("tips");
+  let senastKort = 0;
+  function rita() {
+    const t = nu();
+    ctx.clearRect(0, 0, bredd, hojd);
+    const r = Math.max(4, Math.min(13, 5.2 * vy.k));
+    synliga = [];
+    let antal = 0;
+    const lista = [];
+    for (const tur of turer) {
+      if (t < tur.start || t > tur.slut) continue;
+      const lg = lage(tur, t); if (!lg) continue;
+      antal++;
+      const sx = (lg.xy[0] - vy.x) * vy.k, sy = (lg.xy[1] - vy.y) * vy.k;
+      if (sx < -20 || sy < -20 || sx > bredd + 20 || sy > hojd + 20) continue;
+      lista.push({ tur, sx, sy });
+    }
+    for (const v of lista) {
+      const l = linjer[v.tur.linje], av = markerad !== null && markerad !== v.tur.linje;
+      ctx.globalAlpha = av ? 0.12 : 0.22;
+      ctx.fillStyle = l.namn === "11" ? "#9aa8b6" : l.farg;
+      ctx.beginPath(); ctx.arc(v.sx, v.sy, r * 1.9, 0, 6.2832); ctx.fill();
+    }
+    for (const v of lista) {
+      const l = linjer[v.tur.linje], av = markerad !== null && markerad !== v.tur.linje;
+      ctx.globalAlpha = av ? 0.2 : 1;
+      ctx.fillStyle = l.farg; ctx.strokeStyle = v.tur === vald ? "#ffffff" : l.namn === "11" ? "#9aa8b6" : "#0b1016";
+      ctx.lineWidth = v.tur === vald ? 3 : 1.5;
+      ctx.beginPath(); ctx.arc(v.sx, v.sy, v.tur === vald ? r * 1.35 : r, 0, 6.2832); ctx.fill(); ctx.stroke();
+      if (r >= 9) {
+        ctx.fillStyle = l.text; ctx.font = `700 ${Math.round(r * 1.15)}px "Barlow Condensed", sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(l.namn, v.sx, v.sy + 0.5);
+      }
+      synliga.push(v);
+    }
+    ctx.globalAlpha = 1;
+    klockEl.textContent = tidSek(t);
+    antalEl.textContent = antal;
+    tips.hidden = antal >= 12;
+    if (document.activeElement !== tidReglage) tidReglage.value = Math.floor(t);
+    if (vald && performance.now() - senastKort > 250) { visaKort(t); senastKort = performance.now(); }
+    requestAnimationFrame(rita);
+  }
+
+  const dag = new Date(D.dag + "T12:00:00");
+  document.getElementById("kalla").textContent =
+    `Prototyp. Vagnarna går efter tidtabellen för ${dag.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}, inte realtid. ` +
+    "Schematisk layout genererad med LOOM. Tidtabell från Samtrafiken via Trafiklab, linjefärger från Västtrafik.";
+  storlek(); knappar(); requestAnimationFrame(rita);
+})();
+</script>
