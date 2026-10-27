@@ -22,6 +22,8 @@ API = "https://ext-api.vasttrafik.se"
 RUTOR = [(57.60, 11.80, 57.83, 11.97), (57.60, 11.97, 57.83, 12.12)]
 MAX_AVSTAND = 150      # meter från turens spår
 TIDIG, SEN = -600, 3600
+ANNAN_SKYLT = 240      # sekunder: en tur med annan skylt godtas bara om tiden stämmer så här väl
+DUBBLETT = 25          # meter: samma linje och skylt närmare än så är samma vagn
 
 
 class Vasttrafik:
@@ -121,13 +123,30 @@ class Matchning:
         forsening = nu - _tid_vid(st, s)
         if not TIDIG <= forsening <= SEN:
             return None
-        poang = abs(forsening) + avst * 2 + (0 if skylt == _norm(t["skylt"]) else 900)
+        # En vagn med en skylt som ingen tur i tidtabellen har (till exempel vid en
+        # omledning) får inte kopplas till en tur åt andra hållet med stor försening.
+        samma_skylt = skylt == _norm(t["skylt"])
+        if not samma_skylt and abs(forsening) > ANNAN_SKYLT:
+            return None
+        poang = abs(forsening) + avst * 2 + (0 if samma_skylt else 900)
         if forra == i:
             poang -= 600
         return poang, forsening
 
+    @staticmethod
+    def _utan_dubbletter(vagnar):
+        """Samma vagn rapporteras ibland för två turer på samma plats; behåll en."""
+        kvar = []
+        for v in vagnar:
+            p, skylt = meter(v["latitude"], v["longitude"]), _norm(v.get("direction", ""))
+            if not any(w["line"]["name"] == v["line"]["name"] and _norm(w.get("direction", "")) == skylt
+                       and math.dist(p, meter(w["latitude"], w["longitude"])) < DUBBLETT for w in kvar):
+                kvar.append(v)
+        return kvar
+
     def matcha(self, vagnar, nu):
         """Kopplar vagnarna till turer. nu är sekunder efter dagens midnatt."""
+        vagnar = self._utan_dubbletter(vagnar)
         forslag = []
         for v in vagnar:
             p = meter(v["latitude"], v["longitude"])

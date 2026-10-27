@@ -250,7 +250,7 @@ a { color: var(--signal); }
     <h3>Tecken på kartan</h3>
     <ul>
       <li>En vit prick på en linje är en hållplats där linjen stannar.</li>
-      <li>En gul ram runt en vagn betyder att den är mer än tre minuter sen.</li>
+      <li>En gul bricka eller ring vid en vagn betyder att den är mer än tre minuter sen. Siffran är minuterna.</li>
       <li>En ihålig ring är en vagn som Västtrafik ser, men som inte gick att koppla till en tur i tidtabellen.</li>
     </ul>
     <h3>Om kartan</h3>
@@ -885,7 +885,14 @@ a { color: var(--signal); }
         if (v.tur >= 0 && turer[v.tur]) {
           // Visad försening följer den rapporterade mjukt: vagnen kan stanna, men aldrig backa.
           const diff = v.fMal - v.fVisad;
-          v.fVisad = Math.abs(diff) > 300 ? v.fMal : v.fVisad + Math.max(-2 * dt, Math.min(dt, diff));
+          // takt är hur fort den visade förseningen ändras: 1 = vagnen står still, -2 = tre gånger fortare.
+          // Den ändras gradvis, så att vagnen bromsar och accelererar mjukt i stället för att tvärstanna.
+          if (Math.abs(diff) > 300) { v.fVisad = v.fMal; v.takt = 0; }
+          else {
+            const mal = Math.max(-2, Math.min(1, diff / 4)), takt = v.takt || 0;
+            v.takt = takt + Math.max(-0.8 * dt, Math.min(0.8 * dt, mal - takt));
+            v.fVisad += v.takt * dt;
+          }
           const tur = turer[v.tur], lg = lage(tur, Math.min(tur.slut, Math.max(tur.start, t - v.fVisad)));
           if (lg) lista.push({ id: ref, linje: linjeIdx, xy: lg.xy, sen: v.fMal, tur, lg });
         } else {
@@ -944,8 +951,8 @@ a { color: var(--signal); }
       if (v.sen > 180) { ctx.strokeStyle = T.signal; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(v.sx, v.sy, r * 1.5, 0, 6.2832); ctx.stroke(); }
       const ljusKant = (l.namn === "11" && T.namn === "natt") || (["1", "X"].includes(l.namn) && T.namn === "dag");
       ctx.fillStyle = v.los ? T.bg : l.farg;
-      ctx.strokeStyle = vald_ ? T.text : v.los ? l.farg : ljusKant ? "#8a98a6" : T.kant;
-      ctx.lineWidth = vald_ ? 3 : v.los ? 2.5 : 1.5;
+      ctx.strokeStyle = vald_ ? T.signal : v.los ? l.farg : ljusKant ? "#8a98a6" : T.kant;
+      ctx.lineWidth = vald_ ? 3.5 : v.los ? 2.5 : 1.5;
       ctx.beginPath(); ctx.arc(v.sx, v.sy, vald_ ? r * 1.35 : r, 0, 6.2832); ctx.fill(); ctx.stroke();
       if (r >= 9 && !v.los) {
         ctx.fillStyle = l.text; ctx.font = `700 ${Math.round(r * 1.15)}px "Barlow Condensed", sans-serif`;
@@ -975,8 +982,8 @@ a { color: var(--signal); }
     const bredd_ = Math.max(9, 6.6 * vy.k), radie = bredd_ * 0.38;
     const star = v.lg.star !== undefined, natt = T.namn === "natt";
     const ljusKant = (l.namn === "11" && natt) || (["1", "X"].includes(l.namn) && !natt);
-    const kant = vald_ ? T.text : v.sen > 180 ? T.signal : ljusKant ? "#8a98a6" : T.kant;
-    let fram0 = null, riktning = 0;
+    const kant = ljusKant ? "#8a98a6" : T.kant;
+    let fram0 = null, riktning = 0, mittvinkel = 0;
     for (let j = 2; j >= 0; j--) {
       const fram = bakom(v.tur, v.lg.k, v.lg.s, j * (modul + glapp)), bak = bakom(v.tur, v.lg.k, v.lg.s, j * (modul + glapp) + modul);
       const fx = (fram[0] - vy.x) * vy.k, fy = (fram[1] - vy.y) * vy.k, bx = (bak[0] - vy.x) * vy.k, by = (bak[1] - vy.y) * vy.k;
@@ -989,7 +996,11 @@ a { color: var(--signal); }
       ctx.globalAlpha = alfa * (natt ? 0.3 : 0.18); ctx.fillStyle = ljusKant ? "#8a98a6" : l.farg;
       ctx.beginPath(); ctx.roundRect(-len / 2 - 3, -bredd_ / 2 - 3, len + 6, bredd_ + 6, radie + 3); ctx.fill();
       ctx.globalAlpha = alfa;
-      ctx.fillStyle = l.farg; ctx.strokeStyle = kant; ctx.lineWidth = vald_ || v.sen > 180 ? 2.4 : 1.3;
+      if (vald_) {
+        ctx.strokeStyle = T.signal; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.roundRect(-len / 2 - 4, -bredd_ / 2 - 4, len + 8, bredd_ + 8, radie + 4); ctx.stroke();
+      }
+      ctx.fillStyle = l.farg; ctx.strokeStyle = kant; ctx.lineWidth = 1.3;
       ctx.beginPath();
       ctx.roundRect(-len / 2, -bredd_ / 2, len, bredd_, j === 0 ? [radie * 0.5, radie * 1.3, radie * 1.3, radie * 0.5]
         : j === 2 ? [radie, radie * 0.5, radie * 0.5, radie] : radie * 0.5);
@@ -1011,13 +1022,24 @@ a { color: var(--signal); }
       }
       ctx.restore();
       if (j === 1) {
-        v.hx = (fx + bx) / 2; v.hy = (fy + by) / 2;
+        v.hx = (fx + bx) / 2; v.hy = (fy + by) / 2; mittvinkel = vinkel;
         if (bredd_ >= 12) {
           ctx.font = `700 ${Math.round(bredd_ * 0.9)}px "Barlow Condensed", sans-serif`;
           ctx.textAlign = "center"; ctx.textBaseline = "middle";
           ctx.lineWidth = 3; ctx.strokeStyle = l.namn === "11" ? "#0b1016" : "rgba(11,16,22,0.55)"; ctx.strokeText(l.namn, v.hx, v.hy + 0.5);
           ctx.fillStyle = l.namn === "11" ? "#ffffff" : l.text; ctx.fillText(l.namn, v.hx, v.hy + 0.5);
         }
+      }
+    }
+    // Försenad vagn: en gul bricka med minuterna bredvid vagnen.
+    if (v.sen > 180 && v.hx !== undefined) {
+      const rb = Math.max(6, bredd_ * 0.5), av = bredd_ / 2 + rb + 2;
+      const bxp = v.hx - Math.sin(mittvinkel) * av, byp = v.hy + Math.cos(mittvinkel) * av;
+      ctx.fillStyle = T.signal; ctx.strokeStyle = T.bg; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(bxp, byp, rb, 0, 6.2832); ctx.fill(); ctx.stroke();
+      if (rb >= 8) {
+        ctx.fillStyle = natt ? "#1a1205" : "#ffffff"; ctx.font = `700 ${Math.round(rb * 1.05)}px "Barlow Condensed", sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(`+${Math.round(v.sen / 60)}`, bxp, byp + 0.5);
       }
     }
     // Strålkastarljus framför vagnen på natten.
