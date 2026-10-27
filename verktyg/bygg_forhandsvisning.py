@@ -34,7 +34,7 @@ shim = """<script>
   const svar = (text, typ) => Promise.resolve(new Response(text, { headers: { "Content-Type": typ } }));
   const fetch_ = window.fetch.bind(window);
   window.fetch = (url, ...rest) => {
-    if (url === "karta.svg") return svar(svg, "image/svg+xml");
+    if (String(url).startsWith("karta.svg")) return svar(svg, "image/svg+xml");
     if (url === "api/dag") return svar(dag, "application/json");
     if (url === "api/live") return svar(JSON.stringify({ vagnar: [], tid: 0, fel: "Förhandsvisningen har ingen realtid." }), "application/json");
     return fetch_(url, ...rest);

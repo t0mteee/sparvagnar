@@ -13,6 +13,7 @@ Tidtabellen hämtas från Trafiklab högst en gång per dygn. Positionerna
 hämtas var 5:e sekund, men bara medan någon har sidan öppen.
 """
 import gzip
+import hashlib
 import json
 import os
 import sys
@@ -36,6 +37,13 @@ VT_HEMLIGHET = os.environ.get("VASTTRAFIK_SECRET", "")
 TL_NYCKEL = os.environ.get("TRAFIKLAB_KEY", "")
 ZIP = DATA / "vt.zip"
 INTERVALL = 5
+# Kartan och layouten läses en gång, tillsammans, och får ett gemensamt
+# versionsnummer. Sidan hämtar kartan med versionen i adressen, så att en
+# gammal kopia i webbläsarens cache aldrig kan blandas med nya vagnlägen.
+KARTA = (ROT / "layout" / "karta.svg").read_bytes()
+LAYOUT_TEXT = (ROT / "layout" / "layout.json").read_bytes()
+LAYOUT = json.loads(LAYOUT_TEXT)
+LAYOUT_VERSION = hashlib.sha1(KARTA + LAYOUT_TEXT).hexdigest()[:12]
 FEL_NYCKEL = "VASTTRAFIK_KEY och VASTTRAFIK_SECRET saknas i .env."
 TITTAR_S = 60          # så länge efter senaste anropet räknas sidan som öppen
 
@@ -102,7 +110,7 @@ def bygg(dag, layout):
 
 
 def tidtabell_loop():
-    layout = json.loads((ROT / "layout" / "layout.json").read_text())
+    layout = LAYOUT
     while True:
         try:
             DATA.mkdir(parents=True, exist_ok=True)
@@ -115,8 +123,8 @@ def tidtabell_loop():
                     aktuell = tillstand["dag"] and tillstand["dag"]["dag"]
                 if aktuell != idag.isoformat():
                     d = bygg(idag, layout)
-                    klient = gzip.compress(json.dumps(tidtabell.klientdata(d, layout), ensure_ascii=False,
-                                                      separators=(",", ":")).encode())
+                    k = dict(tidtabell.klientdata(d, layout), layout=LAYOUT_VERSION)
+                    klient = gzip.compress(json.dumps(k, ensure_ascii=False, separators=(",", ":")).encode())
                     with lager:
                         tillstand.update(dag=d, klient=klient, matchning=realtid.Matchning(d))
                     satt_status(tidtabell=f"{idag}, version {d['version']}, {len(d['turer'])} turer")
@@ -190,7 +198,7 @@ class Handler(BaseHTTPRequestHandler):
         if vag in ("/", "/index.html"):
             self.skicka(200, (ROT / "web" / "index.html").read_bytes(), "text/html; charset=utf-8")
         elif vag == "/karta.svg":
-            self.skicka(200, (ROT / "layout" / "karta.svg").read_bytes(), "image/svg+xml")
+            self.skicka(200, KARTA, "image/svg+xml")
         elif vag == "/api/dag":
             with lager:
                 klient = tillstand["klient"]
@@ -204,6 +212,7 @@ class Handler(BaseHTTPRequestHandler):
                 live, status = dict(tillstand["live"]), dict(tillstand["status"])
             live["fel"] = status.get("realtid_fel") or (None if VT_NYCKEL and VT_HEMLIGHET else FEL_NYCKEL)
             live["alder"] = round(time.time() - live["tid"], 1) if live["tid"] else None
+            live["layout"] = LAYOUT_VERSION
             self.json(200, live)
         elif vag == "/api/status":
             with lager:
