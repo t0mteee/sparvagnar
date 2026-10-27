@@ -179,5 +179,6 @@ def klientdata(dag, layout):
         "namn": namn,
         "stationer": [[namn_idx[n], x, y] for n, x, y in layout["stationer"]],
         "hopp": hopp,
+        "strackor": layout.get("strackor", []),
         "turer": turer,
     }

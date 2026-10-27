@@ -189,7 +189,7 @@ def anslutningar(linje, namn, maxd=NARA):
     return ansl[(linje, namn, maxd)]
 
 hopp, hopp_id = [], {}
-saknas, lanade = defaultdict(int), 0
+saknas, lanade, egna_hopp = defaultdict(int), 0, set()
 def kortaste(linje, a, b, maxd=NARA):
     g = grafer.get(linje)
     bast = None
@@ -207,6 +207,8 @@ def hopp_for(linje, a, b):
     if nyckel in hopp_id:
         return hopp_id[nyckel]
     bast = kortaste(linje, a, b)
+    if bast is not None:
+        egna_hopp.add(f"{linje}|{a}|{b}")
     if bast is None:
         # Linjen är inte ritad här (X, 13 eller en omledning): låna den kortaste
         # vägen som någon annan linje har mellan samma hållplatser.
@@ -312,7 +314,7 @@ for nid, n in nod_info.items():
         if g and (linje, n["namn"]) in stannar:
             i = narmast(g, (n["x"], n["y"]), maxd=n["halv"] + LB + (6 if n["grad"] >= 3 else 0))
             if i is not None:
-                egna.append((linje, g["pts"][i]))
+                egna.append((linje, g["pts"][i], n["namn"]))
     prickar += egna
     if not egna:
         utan.append(n["namn"])
@@ -320,7 +322,7 @@ for nid, n in nod_info.items():
         a_, b_ = max(((a_, b_) for a_ in egna for b_ in egna), key=lambda ab: math.dist(ab[0][1], ab[1][1]))
         # I en korsning kan prickarna hamna på olika grenar; då inget band.
         if math.dist(a_[1], b_[1]) <= len(egna) * (LB + MR) + LB:
-            band.append(([l for l, _ in egna], a_[1], b_[1]))
+            band.append(([l for l, *_ in egna], a_[1], b_[1], n["namn"]))
 print(f"hållplatsprickar {len(prickar)}, band {len(band)}, utan märke {sorted(utan)}")
 
 # Hinder för namnen: alla linjers punkter, prickar och knutpunkter, i ett rutnät.
@@ -329,7 +331,7 @@ hinder = defaultdict(list)
 for g in grafer.values():
     for q in g["pts"][::2]:
         hinder[(int(q[0] // RUTA), int(q[1] // RUTA))].append(q)
-for _, q in prickar:
+for _, q, _ in prickar:
     hinder[(int(q[0] // RUTA), int(q[1] // RUTA))].append(q)
 for k in knutar:
     n = nod_info[k]
@@ -402,7 +404,7 @@ for k in ordning:
                 bast_ = (poang, ruta_, rader_, ankare, px, fs)
     poang, ruta_, rader_, ankare, px, fs = bast_
     lagda.append(ruta_)
-    etiketter.append((rader_, ankare, px, ruta_[1], fs, k in knutar))
+    etiketter.append((rader_, ankare, px, ruta_[1], fs, k in knutar, n["namn"]))
 krockar = sum(1 for i, a_ in enumerate(lagda) for b_ in lagda[i + 1:]
               if not (a_[2] < b_[0] or a_[0] > b_[2] or a_[3] < b_[1] or a_[1] > b_[3]))
 print(f"namn {len(etiketter)}, namn som krockar med varandra {krockar}")
@@ -417,23 +419,65 @@ for m_ in re.finditer(r'<polyline class="[^"]*?(line-\d+)" points="[^"]+" style=
         klass_till_linje[m_.group(1)] = id_till_etikett[tmp_till_linje[m_.group(2)]]
 svg_ut = re.sub(r"#([0-9a-f]{6})", lambda m_: "#" + riktig.get(m_.group(1), m_.group(1)), svg)
 svg_ut = re.sub(r"\b(line-\d+)\b(?!label)", lambda m_: "L L-" + klass_till_linje.get(m_.group(1), "okand"), svg_ut)
+
+# Varje ritad linjebit märks med de sträckor (linje|från|till) vars väg går över
+# den. Sidan kan då tona ner bitar som ingen vagn kör idag, till exempel när ett
+# spår är avstängt. Bara linjens egna vägar räknas, inte lånade.
+strackor, strack_idx = [], {}
+vag_rut = defaultdict(lambda: defaultdict(set))
+for nyckel in sorted(egna_hopp & set(hopp_ut)):
+    linje = nyckel.split("|")[0]
+    pts = hopp_ut[nyckel]
+    for q in tathet([(pts[i], pts[i + 1]) for i in range(0, len(pts), 2)]):
+        vag_rut[linje][(int(q[0] // 2), int(q[1] // 2))].add(nyckel)
+
+def strackor_for(linje, punkter):
+    p = tathet(punkter)
+    traff = defaultdict(int)
+    for q in p:
+        nara = set()
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                nara |= vag_rut[linje].get((int(q[0] // 2) + dx, int(q[1] // 2) + dy), set())
+        for k in nara:
+            traff[k] += 1
+    return sorted(k for k, n_ in traff.items() if n_ >= max(2, 0.3 * len(p)))
+
+def marka(m_):
+    klass, pts = m_.group(1), m_.group(2)
+    linje = re.search(r"\bL-(\S+)", klass)
+    if not linje:
+        return m_.group(0)
+    ks = strackor_for(linje.group(1), [tuple(map(float, q.split(","))) for q in pts.split()])
+    if not ks:
+        return m_.group(0)
+    for k in ks:
+        strack_idx.setdefault(k, len(strackor))
+        if strack_idx[k] == len(strackor):
+            strackor.append(k)
+    return f'{m_.group(0)} data-s="{" ".join(str(strack_idx[k]) for k in ks)}"'
+
+svg_ut = re.sub(r'<polyline class="([^"]*)" points="([^"]+)"', marka, svg_ut)
+print(f"linjebitar märkta med {len(strackor)} sträckor")
 svg_ut = re.sub(r"(\d+\.\d)\d+", r"\1", svg_ut)
 svg_ut = svg_ut[svg_ut.index("<svg"):]
-def text_svg(rader_, ankare, x, y_topp, fs, knut):
+def text_svg(rader_, ankare, x, y_topp, fs, knut, namn_):
     y = y_topp + fs * 0.82
     klass = "station-label knut" if knut else "station-label"
     spann = "".join(f'<tspan x="{x:.1f}" dy="{0 if i == 0 else fs * 1.12:.1f}">{html.escape(r)}</tspan>' for i, r in enumerate(rader_))
-    return f'<text class="{klass}" x="{x:.1f}" y="{y:.1f}" font-size="{fs}" text-anchor="{ankare}">{spann}</text>'
+    return (f'<text class="{klass}" data-n="{html.escape(namn_)}" x="{x:.1f}" y="{y:.1f}" font-size="{fs}" '
+            f'text-anchor="{ankare}">{spann}</text>')
 
 svg_ut = svg_ut.replace("</svg>",
     '<g class="hallplatser">'
-    + "".join(f'<line class="hpl-kant L {" ".join("L-" + l for l in ls)}" x1="{a[0]:.1f}" y1="{a[1]:.1f}" '
-              f'x2="{b[0]:.1f}" y2="{b[1]:.1f}" stroke-width="{LB * 0.6 + 1.6:.2f}"/>' for ls, a, b in band)
-    + "".join(f'<line class="hpl-band L {" ".join("L-" + l for l in ls)}" x1="{a[0]:.1f}" y1="{a[1]:.1f}" '
-              f'x2="{b[0]:.1f}" y2="{b[1]:.1f}" stroke-width="{LB * 0.6:.2f}"/>' for ls, a, b in band)
-    + "".join(f'<circle class="hpl L L-{l}" cx="{x:.1f}" cy="{y:.1f}" r="{LB * 0.55:.2f}"/>' for l, (x, y) in prickar)
+    + "".join(f'<line class="hpl-kant L {" ".join("L-" + l for l in ls)}" data-n="{html.escape(nm)}" x1="{a[0]:.1f}" '
+              f'y1="{a[1]:.1f}" x2="{b[0]:.1f}" y2="{b[1]:.1f}" stroke-width="{LB * 0.6 + 1.6:.2f}"/>' for ls, a, b, nm in band)
+    + "".join(f'<line class="hpl-band L {" ".join("L-" + l for l in ls)}" data-n="{html.escape(nm)}" x1="{a[0]:.1f}" '
+              f'y1="{a[1]:.1f}" x2="{b[0]:.1f}" y2="{b[1]:.1f}" stroke-width="{LB * 0.6:.2f}"/>' for ls, a, b, nm in band)
+    + "".join(f'<circle class="hpl L L-{l}" data-n="{html.escape(nm)}" cx="{x:.1f}" cy="{y:.1f}" r="{LB * 0.55:.2f}"/>'
+              for l, (x, y), nm in prickar)
     + "</g>"
-    + '<g class="knutar">' + "".join(f'<circle class="knut" cx="{nod_info[k]["x"]:.1f}" cy="{nod_info[k]["y"]:.1f}" r="{nod_info[k]["radie"]:.1f}"/>'
+    + '<g class="knutar">' + "".join(f'<circle class="knut" data-n="{html.escape(nod_info[k]["namn"])}" cx="{nod_info[k]["x"]:.1f}" cy="{nod_info[k]["y"]:.1f}" r="{nod_info[k]["radie"]:.1f}"/>'
                                      for k in sorted(knutar)) + "</g>"
     + '<g class="namn">' + "".join(text_svg(*e) for e in etiketter) + "</g></svg>")
 (ut / "karta.svg").write_text(svg_ut)
@@ -444,5 +488,6 @@ json.dump({
                for l in linjer],
     "stationer": [[n, round(x, 1), round(y, 1)] for n, x, y in stationer],
     "hopp": hopp_ut,
+    "strackor": strackor,
 }, open(ut / "layout.json", "w"), ensure_ascii=False, separators=(",", ":"))
 print("storlek:", (ut / "karta.svg").stat().st_size // 1000, "kB svg,", (ut / "layout.json").stat().st_size // 1000, "kB layout")

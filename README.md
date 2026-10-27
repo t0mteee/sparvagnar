@@ -110,6 +110,9 @@ innan kartan görs schematisk, som på en klassisk linjekarta.
 gör den till en linjekarta: en vit prick på varje linje som stannar, ihopbunden
 tvärs över knippet; en vit cirkel vid de stora bytespunkterna; och alla
 hållplatsnamn, utplacerade så att de inte krockar med linjer eller varandra.
+Varje linjebit och hållplats i kartan märks dessutom med sträckorna och namnet
+den hör till, så att sidan kan tona ner det som ingen vagn kör idag, till
+exempel ett avstängt spår.
 
 Resultatet ligger i `layout/`: LOOM:s graf (`octi.json` och den utjämnade
 `octi_jamn.json`), kartan (`karta.svg`) och vagnarnas vägar längs varje linje
