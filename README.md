@@ -62,8 +62,16 @@ Den genereras en gång ur tidtabellen med det öppna verktyget
 schematisk karta:
 
 ```
-gtfs2graph -m tram vt.zip | topo | loom | octi
+gtfs2graph -m tram data/tram > graph.json
+topo -d 110 < graph.json > topo.json
+python3 verktyg/forstora_centrum.py topo.json 0.55 | loom | octi > layout/octi.json
+python3 verktyg/bygg_layout.py layout/octi.json data/tram colors.json "$(command -v transitmap)" layout/
 ```
+
+`topo -d 110` slår ihop spår som ligger inom 110 meter från varandra, så att
+centrum får färre små korsningar; längre avstånd slår ihop riktiga
+hållplatser. `forstora_centrum.py` förstorar centrum och krymper förorterna
+innan kartan görs schematisk, som på en klassisk linjekarta.
 
 Resultatet ligger i `layout/`: LOOM:s graf (`octi.json`), kartan som
 transitmap ritar den (`karta.svg`) och vagnarnas vägar längs varje linje
