@@ -6,9 +6,12 @@ en Claude-session som kör i den här mappen på servern.
 
 ## Läge
 
-- Fas 0–3 är byggda och testade i en molnsession: tidtabell, layout och
-  realtid. Nästa steg är att köra det på servern (README.md, "Köra på
-  servern") och kontrollera att vagnarna stämmer dagtid.
+- Fas 0–3 körs på servern. Fas 4 (kul och informativ för barn) är byggd:
+  dag/natt, Åk med, avgångstavla, uppdrag, Visste du?, spårvagnsklocka.
+  Efter git pull: docker compose restart sparvagnar (layouten läses vid start).
+- Sidan är till för ett barn: tydlig, rolig, inga tekniska ord i gränssnittet.
+- Västtrafiks officiella spårvagnskarta har ingen öppen licens; använd den inte,
+  länka till den.
 - `poc/` är den första prototypen, publicerad som en fristående sida.
 
 ## Servern
