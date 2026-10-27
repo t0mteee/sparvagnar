@@ -72,7 +72,7 @@ def dolj(text):
 
 def satt_status(**kw):
     with lager:
-        tillstand["status"].update({k: dolj(str(v)) for k, v in kw.items()})
+        tillstand["status"].update({k: dolj(v) if isinstance(v, str) else v for k, v in kw.items()})
 
 
 # ---------- Tidtabellen ----------
