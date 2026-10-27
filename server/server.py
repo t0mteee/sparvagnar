@@ -190,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
         if vag in ("/", "/index.html"):
             self.skicka(200, (ROT / "web" / "index.html").read_bytes(), "text/html; charset=utf-8")
         elif vag == "/karta.svg":
-            self.skicka(200, (ROT / "layout" / "karta.svg").read_bytes(), "image/svg+xml", cache="max-age=3600")
+            self.skicka(200, (ROT / "layout" / "karta.svg").read_bytes(), "image/svg+xml")
         elif vag == "/api/dag":
             with lager:
                 klient = tillstand["klient"]

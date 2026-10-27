@@ -13,8 +13,11 @@ Körs i Docker på en hemmaserver och nås på http://localhost:8125.
   10× och 60×.
 - **Fas 3, klar att köra på servern:** Västtrafiks positioner var 5:e sekund,
   bara medan någon har sidan öppen, kopplade till turerna med försening.
-- **Fas 4, filmkänslan:** delvis gjord (mörkt utseende, klick på vagn,
-  försenade vagnar med ring). Kvar: störningar, helskärm för TV:n.
+- **Fas 4, filmkänslan:** delvis gjord: mörkt utseende, hållplatser som
+  prickar på varje linje, klick på vagn, försenade vagnar med gul ram, och
+  inzoomat eller för en vald linje ritas vagnarna som ledade spårvagnar som
+  följer spåret genom kurvorna. Kvar: störningar, helskärm för TV:n.
+  Vagnmodellen finns inte i Västtrafiks öppna data, så formen är generisk.
 
 ## Köra på servern
 

@@ -40,7 +40,7 @@ for f in octi["features"]:
     for l in f["properties"].get("lines", []):
         l["color"] = id_till_tmp[l["id"]]
         id_till_etikett[l["id"]] = l["label"]
-svg = subprocess.run([transitmap, "-l", "--line-width", "44", "--line-spacing", "16", "--outline-width", "5", "--line-label-textsize", "70", "--station-label-textsize", "110"],
+svg = subprocess.run([transitmap, "-l", "--no-render-stations", "--line-width", "44", "--line-spacing", "16", "--outline-width", "5", "--line-label-textsize", "70", "--station-label-textsize", "110"],
                      input=json.dumps(octi), capture_output=True, text=True, check=True).stdout
 
 # 2. Kartans koordinatsystem: webbmercator, skalad och förskjuten.
@@ -58,18 +58,13 @@ def till_svg(lon, lat):
     x, y = merc(lon, lat)
     return (x - X0) * skala + pad, (Y1 - y) * skala + pad
 
-# Kontroll mot stationernas polygoner.
-poly = [[tuple(map(float, p.split(","))) for p in pts.split()]
-        for pts in re.findall(r'class="station-poly"[^>]*points="([^"]+)"', svg)]
-mitt = [(sum(p[0] for p in pp) / len(pp), sum(p[1] for p in pp) / len(pp)) for pp in poly]
 stationer = []
 for f in octi["features"]:
     p = f["properties"]
     if f["geometry"]["type"] == "Point" and p.get("station_label"):
         x, y = till_svg(*f["geometry"]["coordinates"])
         stationer.append((p["station_label"], x, y))
-fel = sorted(min(math.dist((x, y), c) for c in mitt) for _, x, y in stationer)
-print(f"stationer {len(stationer)}, avvikelse mot polygoner: median {fel[len(fel)//2]:.2f}, max {fel[-1]:.2f}")
+print(f"stationer {len(stationer)}")
 
 # 3. Varje linjes ritade polylines som en graf.
 STEG = 1.5
@@ -231,6 +226,23 @@ for linje, a, b in sorted(par):
         hopp_ut[f"{linje}|{a}|{b}"] = hopp[i]
 linjer = sorted({l for l, _, _ in par}, key=lambda s_: (not s_.isdigit(), s_.zfill(3)))
 print(f"par {len(par)}, vägar längs linjen {len(hopp_ut)}, saknas {len(saknas)}")
+
+# Hållplatsprickar i stället för transitmaps stationsblock: en prick på varje
+# linje som stannar vid hållplatsen, där linjen passerar den.
+stannar = {(l, n) for l, a, b in par for n in (a, b)}
+prickar = []
+for linje, n in sorted(stannar):
+    g = grafer.get(linje)
+    if not g:
+        continue
+    bast = None
+    for p in pos_per_namn.get(n, []):
+        i = narmast(g, p, maxd=40)
+        if i is not None and (bast is None or math.dist(p, g["pts"][i]) < bast[0]):
+            bast = (math.dist(p, g["pts"][i]), g["pts"][i])
+    if bast:
+        prickar.append((linje, bast[1]))
+print(f"hållplatsprickar {len(prickar)}")
 for k in sorted(saknas)[:20]:
     print("  saknas:", k)
 
@@ -246,6 +258,8 @@ svg_ut = re.sub(r"#([0-9a-f]{6})", lambda m_: "#" + riktig.get(m_.group(1), m_.g
 svg_ut = re.sub(r"\b(line-\d+)\b(?!label)", lambda m_: "L L-" + klass_till_linje.get(m_.group(1), "okand"), svg_ut)
 svg_ut = re.sub(r"(\d+\.\d)\d+", r"\1", svg_ut)
 svg_ut = svg_ut[svg_ut.index("<svg"):]
+svg_ut = svg_ut.replace("</svg>", '<g class="hallplatser">' + "".join(
+    f'<circle class="hpl L L-{l}" cx="{x:.1f}" cy="{y:.1f}" r="2.1"/>' for l, (x, y) in prickar) + "</g></svg>")
 (ut / "karta.svg").write_text(svg_ut)
 json.dump({
     "storlek": [W, H],
