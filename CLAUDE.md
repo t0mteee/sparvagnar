@@ -29,6 +29,8 @@ en Claude-session som kör i den här mappen på servern.
 
 - Kontroll av port, nycklar och tidtabell: `./scripts/check.sh`
 - Starta: `docker compose up -d`. Efter `git pull`: `docker compose restart sparvagnar`
+- Utifrån via Cloudflare Tunnel: `docker compose --profile natet up -d`, token i
+  `.env` (`TUNNEL_TOKEN`). Adressen ställs in i Cloudflare, inte i repot.
 - Logg: `docker compose logs -f sparvagnar`
 - Läge: `curl -s localhost:8125/api/status`
 - LOOM för layouten: `docker build -t loom https://github.com/ad-freiburg/loom.git`,
@@ -38,7 +40,8 @@ en Claude-session som kör i den här mappen på servern.
 
 - Inga hemligheter i git: `.env` och `data/`. Får du en nyckel i chatten,
   använd den men skriv den aldrig till en fil i repot.
-- Repot är publikt. Inget om hemmet eller familjen här.
+- Repot är publikt. Inget om hemmet eller familjen här. Domänen och adressen
+  till sidan står bara i Cloudflare, inte i repot.
 - Kontona hos Västtrafik och Trafiklab skapar användaren själv.
 - Layouten är vår egen. Rita inte av Västtrafiks linjenätskarta.
 - Servern skrivs i Python med bara standardbiblioteket, som familjesidan i

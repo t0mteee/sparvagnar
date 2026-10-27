@@ -62,9 +62,17 @@ def logg(*a):
     print(tidtabell.stockholm_nu().strftime("%H:%M:%S"), *a, flush=True)
 
 
+def dolj(text):
+    """Felmeddelanden syns på sidan, som kan vara öppen för alla: aldrig en nyckel i dem."""
+    for hemligt in (VT_NYCKEL, VT_HEMLIGHET, TL_NYCKEL):
+        if hemligt:
+            text = text.replace(hemligt, "…")
+    return text
+
+
 def satt_status(**kw):
     with lager:
-        tillstand["status"].update(kw)
+        tillstand["status"].update({k: dolj(str(v)) for k, v in kw.items()})
 
 
 # ---------- Tidtabellen ----------

@@ -39,6 +39,30 @@ hemmanätet på samma port med serverns namn. Första starten hämtar
 tidtabellen och bygger dagens turer, vilket tar en eller ett par minuter;
 sidan väntar och säger till under tiden. Läget syns på `/api/status`.
 
+### Nå sidan utifrån
+
+Sidan kan nås från hela nätet genom en Cloudflare Tunnel. Ingen port öppnas i
+routern och serverns adress syns inte; tunneln går ut från Macen till
+Cloudflare. Domänens DNS ska ligga hos Cloudflare.
+
+1. I Cloudflare: Zero Trust, Networks, Tunnels, Create a tunnel. Välj
+   Cloudflared, döp den till `sparvagnar` och välj Docker som miljö.
+   Kopiera token, den långa strängen efter `--token`, till `TUNNEL_TOKEN` i
+   `.env`. Kör inte kommandot Cloudflare visar; tunneln startas av compose.
+2. Lägg till en publik adress (Public hostname, även kallat Published
+   application route): välj en underdomän och domänen, Type `HTTP` och URL
+   `sparvagnar:8125`.
+3. Starta med tunneln:
+
+```
+docker compose --profile natet up -d
+docker compose logs tunnel        # ska visa "Registered tunnel connection"
+```
+
+Sidan är öppen för alla som har adressen; den visar bara spårvagnar och
+nycklarna stannar i containern. Vagnarnas lägen hämtas en gång var femte
+sekund så länge någon har sidan öppen, hur många som än tittar.
+
 Servern (`server/`) är Python med bara standardbiblioteket:
 
 - `tidtabell.py` hämtar Västtrafiks GTFS från Trafiklab högst en gång per

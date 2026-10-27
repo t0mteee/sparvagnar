@@ -1,6 +1,7 @@
 # Spårvagnskartan på servern, helt skild från Home Assistant i rahbari.
 #
 #   Starta:   docker compose up -d
+#   Med nätet: docker compose --profile natet up -d (Cloudflare Tunnel)
 #   Sidan:    http://localhost:8125 (PORT i .env)
 #   Logg:     docker compose logs -f sparvagnar
 #   Läge:     curl -s localhost:8125/api/status
@@ -28,3 +29,19 @@ services:
       - ./web:/app/web:ro
       - ./layout:/app/layout:ro
       - ./data:/data
+
+  # Vägen ut på nätet: Cloudflare Tunnel, så att sidan nås utan Tailscale och
+  # utan öppna portar i routern. Tunneln och adressen skapas i Cloudflare
+  # Zero Trust (se README.md), token i .env. Pekar på http://sparvagnar:8125.
+  # Startas bara med profilen "natet":
+  #   docker compose --profile natet up -d
+  tunnel:
+    container_name: sparvagnar-tunnel
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ["natet"]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - sparvagnar
