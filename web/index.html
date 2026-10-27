@@ -198,6 +198,9 @@ a { color: var(--signal); }
   </header>
 
   <nav class="ikoner" aria-label="Inställningar">
+    <button class="ikon" id="hem" aria-label="Tillbaka till centrum">
+      <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 9.5V20h5v-6h4v6h5V9.5"/></svg>
+    </button>
     <button class="ikon" id="tema" aria-label="Byt till dag"></button>
     <button class="ikon" id="ljud" aria-label="Stäng av ljudet"></button>
     <button class="ikon" id="uppdrag" aria-label="Starta ett uppdrag" aria-pressed="false">
@@ -236,7 +239,7 @@ a { color: var(--signal); }
   <section class="panel om-ruta" id="om" hidden role="dialog" aria-labelledby="om-rubrik">
     <button class="stang" id="om-stang" aria-label="Stäng">✕</button>
     <h2 id="om-rubrik">Spårvagnarna just nu</h2>
-    <p>Varje prick är en spårvagn som kör i Göteborg. Zooma in, så ser du vagnarna åka på sina linjer.</p>
+    <p>Varje prick är en spårvagn som kör i Göteborg. Zooma in, så ser du vagnarna åka på sina linjer. Tryck två gånger snabbt för att zooma in, och på huset för att komma tillbaka till centrum.</p>
     <ul>
       <li><b>Tryck på en vagn</b> för att se vart den ska. Tryck på <b>Åk med</b>, så följer kartan vagnen.</li>
       <li><b>Tryck på en hållplats</b> för att se när nästa vagn kommer.</li>
@@ -648,11 +651,14 @@ a { color: var(--signal); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     minK = Math.min(bredd / W, hojd / H) * 0.95;
     if (!forraB) { // första gången: centrala Göteborg, runt Brunnsparken, i bild
-      const bp = stationer.find(s => s.namn === "Brunnsparken") || { x: W / 2, y: H / 2 };
-      const k = Math.max(minK, Math.min(bredd, hojd) / (W * 0.5));
-      vy.k = k; vy.x = bp.x - bredd / 2 / k; vy.y = bp.y - hojd / 2 / k;
+      Object.assign(vy, startvy());
     } else { vy.x += (forraB - bredd) / 2 / vy.k; vy.y += (forraH - hojd) / 2 / vy.k; }
     tillampa();
+  }
+  function startvy() {
+    const bp = stationer.find(s => s.namn === "Brunnsparken") || { x: W / 2, y: H / 2 };
+    const k = Math.max(minK, Math.min(bredd, hojd) / (W * 0.5));
+    return { k, x: bp.x - bredd / 2 / k, y: bp.y - hojd / 2 / k };
   }
   function tillampa() {
     vy.k = Math.max(minK, Math.min(minK * 40, vy.k));
@@ -711,8 +717,16 @@ a { color: var(--signal); }
       nyp = d;
     }
   });
+  let senastTryck = { t: 0, x: 0, y: 0 };
   const slapp = e => {
-    if (pekare.size === 1 && flyttat < 6) tryck(e);
+    if (pekare.size === 1 && flyttat < 6) {
+      const r = karta.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top, nuT = performance.now();
+      if (nuT - senastTryck.t < 320 && Math.hypot(sx - senastTryck.x, sy - senastTryck.y) < 30) {
+        const k = Math.min(minK * 40, vy.k * 2.2), mx = vy.x + sx / vy.k, my = vy.y + sy / vy.k;
+        flygning = { fran: { ...vy }, mal: { k, x: mx - sx / k, y: my - sy / k }, t0: nuT };
+        senastTryck.t = 0;
+      } else { senastTryck = { t: nuT, x: sx, y: sy }; tryck(e); }
+    }
     pekare.delete(e.pointerId); if (pekare.size < 2) nyp = null;
     if (!pekare.size) karta.classList.remove("drar");
   };
@@ -750,6 +764,7 @@ a { color: var(--signal); }
   $("stang").onclick = stang;
   document.addEventListener("keydown", e => { if (e.key === "Escape") { stang(); $("om").hidden = true; } });
   $("info").onclick = () => { $("om").hidden = !$("om").hidden; };
+  $("hem").onclick = () => { folj = null; flygning = { fran: { ...vy }, mal: startvy(), t0: performance.now() }; };
   if (document.fullscreenEnabled) {
     $("helskarm").hidden = false;
     $("helskarm").onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
