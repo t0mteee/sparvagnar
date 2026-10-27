@@ -62,22 +62,36 @@ Den genereras en gång ur tidtabellen med det öppna verktyget
 schematisk karta:
 
 ```
-gtfs2graph -m tram data/tram > graph.json
+python3 verktyg/vanliga_turer.py data/tram data/tram_vanlig
+gtfs2graph -m tram data/tram_vanlig > graph.json
 topo -d 110 < graph.json > topo.json
 python3 verktyg/forstora_centrum.py topo.json 0.55 | loom | octi > layout/octi.json
-python3 verktyg/bygg_layout.py layout/octi.json data/tram colors.json "$(command -v transitmap)" layout/
+python3 verktyg/jamna_avstand.py layout/octi.json > layout/octi_jamn.json
+python3 verktyg/bygg_layout.py layout/octi_jamn.json data/tram colors.json "$(command -v transitmap)" layout/
 ```
+
+`vanliga_turer.py` tar bara med det vanliga linjenätet de närmaste åtta
+veckorna: sträckor som minst 4 % av linjens turer kör, minst varannan dag.
+Omledningar, turer till vagnhallen, extralinjen X och säsongslinjen 13 ritas
+inte, annars blir knippena breda av linjer som nästan aldrig går där. Vagnar på
+sådana turer lånar en annan linjes väg mellan samma hållplatser.
 
 `topo -d 110` slår ihop spår som ligger inom 110 meter från varandra, så att
 centrum får färre små korsningar; längre avstånd slår ihop riktiga
 hållplatser. `forstora_centrum.py` förstorar centrum och krymper förorterna
 innan kartan görs schematisk, som på en klassisk linjekarta.
+`jamna_avstand.py` sprider ut hållplatserna jämnt mellan korsningarna.
 
-Resultatet ligger i `layout/`: LOOM:s graf (`octi.json`), kartan som
-transitmap ritar den (`karta.svg`) och vagnarnas vägar längs varje linje
+`bygg_layout.py` ritar linjerna med transitmap och lägger sedan till det som
+gör den till en linjekarta: en vit prick på varje linje som stannar, ihopbunden
+tvärs över knippet; en vit cirkel vid de stora bytespunkterna; och alla
+hållplatsnamn, utplacerade så att de inte krockar med linjer eller varandra.
+
+Resultatet ligger i `layout/`: LOOM:s graf (`octi.json` och den utjämnade
+`octi_jamn.json`), kartan (`karta.svg`) och vagnarnas vägar längs varje linje
 mellan hållplatserna (`layout.json`). Servern läser bara det, så varken LOOM
-eller transitmap behövs på servern. Görs om med `verktyg/bygg_layout.py` när
-linjenätet ändras. Tidtabellsdatan från Trafiklab är CC0.
+eller transitmap behövs på servern. Görs om när linjenätet ändras.
+Tidtabellsdatan från Trafiklab är CC0.
 
 ## Så rör sig vagnarna
 

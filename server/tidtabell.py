@@ -173,6 +173,7 @@ def klientdata(dag, layout):
                       [namn_idx[s[0]] for s in st], tider])
     return {
         "dag": dag["dag"], "version": dag["version"], "storlek": layout["storlek"],
+        "linjebredd": layout.get("linjebredd", 4.4),
         "linjer": [{"namn": l, "farg": farger.get(l, {}).get("farg", "#8a97a6"),
                     "text": farger.get(l, {}).get("text", "#0b1016")} for l in linjer],
         "namn": namn,

@@ -38,10 +38,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--display); o
 
 /* transitmaps karta, omfärgad efter temat */
 #karta .transit-edge-outline, #karta .inner-geom-outline { stroke: var(--kant) !important; }
-#karta .transit-edge-outline.L-11, #karta .inner-geom-outline.L-11 { stroke: var(--svart-kant) !important; stroke-width: 6.6 !important; }
-:root[data-tema="dag"] #karta :is(.transit-edge-outline, .inner-geom-outline):is(.L-1, .L-X) { stroke: var(--vit-kant) !important; stroke-width: 6.6 !important; }
-#karta .hpl { fill: var(--prick); stroke: var(--prick-kant); stroke-width: 1; }
-#karta .station-label { fill: var(--namn); font-family: var(--display); font-weight: 600; }
+#karta .transit-edge-outline.L-11, #karta .inner-geom-outline.L-11 { stroke: var(--svart-kant) !important; stroke-width: var(--kantbredd, 6.6px) !important; }
+:root[data-tema="dag"] #karta :is(.transit-edge-outline, .inner-geom-outline):is(.L-1, .L-X) { stroke: var(--vit-kant) !important; stroke-width: var(--kantbredd, 6.6px) !important; }
+#karta .hpl { fill: var(--prick); stroke: var(--prick-kant); stroke-width: 0.8; }
+#karta .hpl-kant { stroke: var(--prick-kant); stroke-linecap: round; }
+#karta .hpl-band { stroke: var(--prick); stroke-linecap: round; }
+#karta .knut { fill: var(--prick); stroke: var(--prick-kant); stroke-width: 1.4; }
+#karta .station-label { fill: var(--namn); font-family: var(--display); font-weight: 600; stroke: var(--bg); stroke-width: 2.4px; stroke-linejoin: round; paint-order: stroke; }
+#karta .station-label.knut { font-weight: 700; fill: var(--text); }
 #karta .line-label { font-family: var(--display); }
 #karta .L { transition: opacity 0.25s; }
 
@@ -393,7 +397,7 @@ a { color: var(--signal); }
   lageEl.textContent = "Laddar tidtabellen";
   lasIn(await hamtaDag());
   visaMeddelande("");
-  const [W, H] = D.storlek;
+  const [W, H] = D.storlek, LB = D.linjebredd || 4.4;
 
   // Kartan med layoutens version i adressen, så att en gammal kopia i cachen
   // aldrig visas under vagnar som räknats fram för en ny layout.
@@ -404,6 +408,8 @@ a { color: var(--signal); }
   kartaFel = !(Math.abs(ruta[2] - W) <= 1 && Math.abs(ruta[3] - H) <= 1);
   svg.removeAttribute("width"); svg.removeAttribute("height");
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  // Vita och svarta linjer får en kant runt sig, lika tjock oavsett linjebredd.
+  karta.style.setProperty("--kantbredd", `${LB + 1.6}px`);
 
   // ---------- Läge längs spåret ----------
   function punktVid(h, mal) {
@@ -924,7 +930,7 @@ a { color: var(--signal); }
     } else foljStod = null;
 
     ctx.clearRect(0, 0, bredd, hojd);
-    const r = Math.max(4, Math.min(13, 5.2 * vy.k));
+    const r = Math.max(4, Math.min(13, 1.2 * LB * vy.k));
     synliga = [];
     for (const v of lista) {
       v.sx = (v.xy[0] - vy.x) * vy.k; v.sy = (v.xy[1] - vy.y) * vy.k;
@@ -979,7 +985,7 @@ a { color: var(--signal); }
   // Vilken modell som kör finns inte i Västtrafiks öppna data, så formen är densamma för alla.
   function ritaSparvagn(v, l, vald_, nuMs) {
     const langd = Math.max(48, 38 * vy.k) / vy.k, glapp = langd * 0.03, modul = (langd - 2 * glapp) / 3;
-    const bredd_ = Math.max(9, 6.6 * vy.k), radie = bredd_ * 0.38;
+    const bredd_ = Math.max(9, 1.6 * LB * vy.k), radie = bredd_ * 0.38;
     const star = v.lg.star !== undefined, natt = T.namn === "natt";
     const ljusKant = (l.namn === "11" && natt) || (["1", "X"].includes(l.namn) && !natt);
     const kant = ljusKant ? "#8a98a6" : T.kant;
