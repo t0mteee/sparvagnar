@@ -203,6 +203,9 @@ a { color: var(--signal); }
     <button class="ikon" id="uppdrag" aria-label="Starta ett uppdrag" aria-pressed="false">
       <svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
     </button>
+    <button class="ikon" id="helskarm" aria-label="Helskärm" hidden>
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
     <button class="ikon" id="info" aria-label="Om kartan">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>
     </button>
@@ -263,7 +266,7 @@ a { color: var(--signal); }
   const las = (k, std) => { try { return localStorage.getItem(k) ?? std; } catch { return std; } };
   const spara = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  let markerad = null;
+  let markerad = null, uppdrag = null, konfetti = [], faktaIdx = 0, senastAntalPerLinje = new Map();
 
   // ---------- Klockan ----------
   const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
@@ -505,7 +508,28 @@ a { color: var(--signal); }
     });
     markera();
   }
+  // Ändhållplatser och antal hållplatser per linje, ur dagens turer.
+  function linjeFakta(namn) {
+    const mot = new Map(), hpl = new Set();
+    for (const t of turer) if (linjer[t.linje].namn === namn) {
+      mot.set(t.mot, (mot.get(t.mot) || 0) + 1);
+      for (const n of t.stopp) hpl.add(n);
+    }
+    const [a, b] = [...mot].sort((x, y) => y[1] - x[1]).map(([n]) => D.namn[n]);
+    return { a, b, hpl: hpl.size };
+  }
+  function visaLinjeInfo() {
+    if (!markerad || uppdrag) return;
+    const f = linjeFakta(markerad), ute = senastAntalPerLinje.get(markerad) || 0;
+    const el = $("fakta");
+    el.className = "fakta";
+    const html = `<span class="etikett">Linje</span>${bricka(linjeFor(markerad), true)} `
+      + (f.b ? `går mellan <b>${esc(f.b)}</b> och <b>${esc(f.a)}</b>` : `går till <b>${esc(f.a)}</b>`)
+      + ` och stannar vid ${f.hpl} hållplatser. ${ute === 1 ? "En vagn" : `<b>${ute}</b> vagnar`} är ute just nu.`;
+    if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+  }
   function markera() {
+    if (markerad) visaLinjeInfo(); else if (!uppdrag) { $("fakta").dataset.html = ""; nastaFakta(); }
     [...linjeRad.children].forEach(b => {
       b.setAttribute("aria-pressed", String(markerad === b.textContent));
       b.classList.toggle("dimmad", markerad !== null && markerad !== b.textContent);
@@ -544,10 +568,9 @@ a { color: var(--signal); }
       },
     ];
   }
-  let faktaIdx = 0;
   function nastaFakta() {
-    if (uppdrag) return;
-    $("fakta").className = "fakta";
+    if (uppdrag || markerad) return;
+    $("fakta").className = "fakta"; $("fakta").dataset.html = "";
     for (let i = 0; i < fakta.length; i++) {
       const text = fakta[faktaIdx++ % fakta.length]();
       if (text) { $("fakta").innerHTML = `<span class="etikett">Visste du?</span>${text}`; return; }
@@ -555,7 +578,6 @@ a { color: var(--signal); }
   }
   // ---------- Uppdrag: hitta en vagn ----------
   // Uppdragen väljs bland vagnar som är ute just nu, så de går alltid att klara.
-  let uppdrag = null, konfetti = [];
   function nyttUppdrag() {
     const ute = synliga.length ? synliga : [];
     const kandidater = (ute.length ? ute : []).filter(v => v.tur && !v.los);
@@ -625,9 +647,10 @@ a { color: var(--signal); }
     canvas.width = Math.round(bredd * dpr); canvas.height = Math.round(hojd * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     minK = Math.min(bredd / W, hojd / H) * 0.95;
-    if (!forraB) { // första gången: centrala Göteborg i bild
-      const k = Math.max(minK, Math.min(bredd / 1250, hojd / 1250));
-      vy.k = k; vy.x = 1450 - bredd / 2 / k; vy.y = 1950 - hojd / 2 / k;
+    if (!forraB) { // första gången: centrala Göteborg, runt Brunnsparken, i bild
+      const bp = stationer.find(s => s.namn === "Brunnsparken") || { x: W / 2, y: H / 2 };
+      const k = Math.max(minK, Math.min(bredd, hojd) / (W * 0.5));
+      vy.k = k; vy.x = bp.x - bredd / 2 / k; vy.y = bp.y - hojd / 2 / k;
     } else { vy.x += (forraB - bredd) / 2 / vy.k; vy.y += (forraH - hojd) / 2 / vy.k; }
     tillampa();
   }
@@ -727,6 +750,10 @@ a { color: var(--signal); }
   $("stang").onclick = stang;
   document.addEventListener("keydown", e => { if (e.key === "Escape") { stang(); $("om").hidden = true; } });
   $("info").onclick = () => { $("om").hidden = !$("om").hidden; };
+  if (document.fullscreenEnabled) {
+    $("helskarm").hidden = false;
+    $("helskarm").onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+  }
   $("om-stang").onclick = () => { $("om").hidden = true; };
 
   // Vagnens tur och försening, oavsett läge.
@@ -909,6 +936,9 @@ a { color: var(--signal); }
     antalEl.textContent = lista.length;
     if (document.activeElement !== tidReglage) tidReglage.value = Math.floor(t);
     if (nuMs - senastKort > 250) {
+      senastAntalPerLinje = new Map();
+      for (const v of lista) { const n = linjer[v.linje] ? linjer[v.linje].namn : "?"; senastAntalPerLinje.set(n, (senastAntalPerLinje.get(n) || 0) + 1); }
+      visaLinjeInfo();
       uppdateraLage(lista.length);
       if (valt) visaKort(t);
       senastKort = nuMs;
