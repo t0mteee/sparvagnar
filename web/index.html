@@ -479,9 +479,10 @@ a { color: var(--signal); }
     } else {
       if (harLive()) { text = `Live, ${Math.round((performance.now() - live.hamtad) / 1000)} s sedan`; klass = "live"; }
       else text = "Tidtabell";
-      if (!harLive() && live.fel) visaMeddelande(`Ingen realtid: ${esc(live.fel)} Visar tidtabellen.`);
-      else if (!harLive() && live.hamtad) visaMeddelande("Realtiden har tystnat. Visar tidtabellen.");
-      else if (antal < 12) visaMeddelande("Nästan alla vagnar sover nu.", { text: "Se morgonrusningen", gor: () => stall(7 * 3600 + 30 * 60, 10) });
+      const morgon = antal < 12 ? { text: "Se morgonrusningen", gor: () => stall(7 * 3600 + 30 * 60, 10) } : null;
+      if (!harLive() && live.fel) visaMeddelande(`Ingen realtid: ${esc(live.fel)} Visar tidtabellen.`, morgon);
+      else if (!harLive() && live.hamtad) visaMeddelande("Realtiden har tystnat. Visar tidtabellen.", morgon);
+      else if (morgon) visaMeddelande("Nästan alla vagnar sover nu.", morgon);
       else visaMeddelande("");
     }
     lageEl.textContent = text; lageEl.className = "lage " + klass;

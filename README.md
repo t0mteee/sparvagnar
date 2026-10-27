@@ -13,11 +13,16 @@ Körs i Docker på en hemmaserver och nås på http://localhost:8125.
   10× och 60×.
 - **Fas 3, klar att köra på servern:** Västtrafiks positioner var 5:e sekund,
   bara medan någon har sidan öppen, kopplade till turerna med försening.
-- **Fas 4, filmkänslan:** delvis gjord: mörkt utseende, hållplatser som
-  prickar på varje linje, klick på vagn, försenade vagnar med gul ram, och
-  inzoomat eller för en vald linje ritas vagnarna som ledade spårvagnar som
-  följer spåret genom kurvorna. Kvar: störningar, helskärm för TV:n.
+- **Fas 4, kul och informativ:** dag- och nattema, ledade spårvagnar som
+  följer spåret när man zoomar in eller väljer en linje, Åk med (kameran
+  följer vagnen och visar hållplatsraden som i vagnen), avgångstavla per
+  hållplats, uppdrag (hitta en viss vagn), Visste du?-fakta ur dagens
+  tidtabell och en spårvagnsklocka. Kvar: störningar, helskärm för TV:n.
   Vagnmodellen finns inte i Västtrafiks öppna data, så formen är generisk.
+
+Västtrafiks officiella spårvagnskarta har ingen öppen licens och används
+därför inte; sidan länkar till den. `verktyg/bygg_forhandsvisning.py` gör en
+fristående förhandsvisning av sidan med tidtabellen inbakad.
 
 ## Köra på servern
 
