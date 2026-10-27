@@ -1,8 +1,11 @@
 """Bygger kartans layout: SVG från transitmap och vagnarnas vägar längs linjerna.
 
   python3 verktyg/bygg_layout.py jamn.json data/tram colors.json transitmap layout/
+  python3 verktyg/bygg_layout.py jamn.json data/kungsbacka farger.json transitmap layout/kungsbacka/ \
+      --knutar "Kungsbacka station"
 
-jamn.json är LOOM:s graf efter verktyg/jamna_avstand.py.
+jamn.json är LOOM:s graf efter verktyg/jamna_avstand.py. --knutar anger de
+stora bytespunkterna; utan den används Göteborgs.
 
 Resultatet (layout/karta.svg och layout/layout.json) checkas in. Servern läser
 det och behöver varken LOOM eller transitmap. Kör om när linjenätet ändras.
@@ -11,6 +14,7 @@ Varje linje får en tillfällig unik färg när transitmap ritar, så att varje
 ritad polyline kan knytas till sin linje. Vagnarnas väg mellan två hållplatser
 är kortaste vägen längs just den linjens ritade polylines.
 """
+import argparse
 import heapq
 import html
 import json
@@ -21,8 +25,13 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-octi_path, gtfs_dir, colors_path, transitmap, ut = sys.argv[1:6]
-ut = Path(ut)
+arg = argparse.ArgumentParser()
+for namn_ in ("octi", "gtfs", "farger", "transitmap", "ut"):
+    arg.add_argument(namn_)
+arg.add_argument("--knutar", default="Brunnsparken,Drottningtorget,Gamlestads Torg,Hjalmar Brantingsplatsen,"
+                 "Järntorget,Korsvägen,Marklandsgatan,Redbergsplatsen")
+a_ = arg.parse_args()
+octi_path, gtfs_dir, colors_path, transitmap, ut = a_.octi, a_.gtfs, a_.farger, a_.transitmap, Path(a_.ut)
 ut.mkdir(parents=True, exist_ok=True)
 
 # Linjebredd, mellanrum och kant i transitmaps enheter (tiondels kartenheter).
@@ -85,6 +94,7 @@ def tathet(pts):
     return ut_
 
 grafer = defaultdict(lambda: {"pts": [], "adj": defaultdict(list), "rut": defaultdict(list)})
+inre = []   # linjerna inne i noderna, där de byter knippe
 def nod(g, p, eps=0.8):
     rx, ry = int(p[0] // 2), int(p[1] // 2)
     for dx in (-1, 0, 1):
@@ -105,6 +115,8 @@ for m_ in re.finditer(r'<polyline class="([^"]*)" points="([^"]+)" style="([^"]+
     etikett = id_till_etikett[tmp_till_linje[farg]]
     g = grafer[etikett]
     p = tathet([tuple(map(float, q.split(","))) for q in pts.split()])
+    if "inner-geom" in klass:
+        inre.append(p)
     ids = [nod(g, q) for q in p]
     for a, b in zip(ids, ids[1:]):
         if a != b:
@@ -288,15 +300,36 @@ for nid, f in noder.items():
 # De stora bytespunkterna ritas som en vit cirkel över korsningen, som på en
 # tryckt linjekarta. Vilka det är går inte att räkna fram ur tidtabellen; det är
 # platserna där man byter mellan många linjer åt olika håll.
-KNUTAR = {"Brunnsparken", "Drottningtorget", "Gamlestads Torg", "Hjalmar Brantingsplatsen", "Järntorget",
-          "Korsvägen", "Marklandsgatan", "Redbergsplatsen"}
+KNUTAR = set(a_.knutar.split(","))
 knutar = set()
 for namn_ in KNUTAR:
     kandidater = [nid for nid, n in nod_info.items() if n["namn"] == namn_]
     if kandidater:
         knutar.add(max(kandidater, key=lambda nid: (nod_info[nid]["grad"], nod_info[nid]["halv"])))
+# Cirkeln ska täcka linjerna inne i noden. Där många linjer möts ritar
+# transitmap dem en bra bit ut från noden, så radien mäts på dem. Varje
+# linjebit inne i en nod hör till den nod som ligger närmast dess mitt.
+nodlage = {nid: till_svg(*f["geometry"]["coordinates"]) for nid, f in noder.items()}
+inne_i = defaultdict(list)
+for p in inre:
+    mitt_ = (sum(q[0] for q in p) / len(p), sum(q[1] for q in p) / len(p))
+    inne_i[min(nodlage, key=lambda nid: math.dist(nodlage[nid], mitt_))].extend(p)
+def radie_for(nid):
+    n = nod_info[nid]
+    return max(n["halv"] + 2.5, max((math.dist(q, (n["x"], n["y"])) for q in inne_i[nid]), default=0) + LB * 0.7, 13)
+
+# Ligger samma bytespunkt i flera noder nära varandra (som buss- och tågdelen av
+# en station) ritas den som en kapsel över dem alla i stället för en cirkel.
+kapsel = {}
 for k in knutar:
-    nod_info[k]["radie"] = max(nod_info[k]["halv"] + 2.5, 13)
+    n = nod_info[k]
+    n["radie"] = radie_for(k)
+    andra = [nid for nid, m in nod_info.items() if nid != k and m["namn"] == n["namn"]
+             and math.dist((m["x"], m["y"]), (n["x"], n["y"])) < 4 * n["radie"]]
+    if andra:
+        n["radie"] = max([n["radie"]] + [radie_for(nid) for nid in andra])
+        kapsel[k] = [(nod_info[nid]["x"], nod_info[nid]["y"]) for nid in andra]
+    print(f"  {n['namn']}: radie {n['radie']:.0f} (knippet {n['halv']:.0f}){', kapsel' if andra else ''}")
 print(f"knutpunkter {len(knutar)}, saknas {sorted(KNUTAR - {nod_info[k]['namn'] for k in knutar})}")
 
 # Hållplatsmärken: en vit prick på varje linje som stannar, där linjen passerar
@@ -336,9 +369,17 @@ for _, q, _ in prickar:
 for k in knutar:
     n = nod_info[k]
     r = n["radie"]
-    for v in range(0, 360, 20):
-        q = (n["x"] + r * math.cos(math.radians(v)), n["y"] + r * math.sin(math.radians(v)))
-        hinder[(int(q[0] // RUTA), int(q[1] // RUTA))].append(q)
+    for cx, cy in [(n["x"], n["y"])] + kapsel.get(k, []):
+        for v in range(0, 360, 20):
+            q = (cx + r * math.cos(math.radians(v)), cy + r * math.sin(math.radians(v)))
+            hinder[(int(q[0] // RUTA), int(q[1] // RUTA))].append(q)
+    for cx, cy in kapsel.get(k, []):   # kapselns raka sidor
+        dx, dy = cx - n["x"], cy - n["y"]
+        d = math.hypot(dx, dy) or 1
+        for t in range(1, 10):
+            for sida in (-1, 1):
+                q = (n["x"] + dx * t / 10 - dy / d * r * sida, n["y"] + dy * t / 10 + dx / d * r * sida)
+                hinder[(int(q[0] // RUTA), int(q[1] // RUTA))].append(q)
 
 def traffar(ruta_):
     x1, y1, x2, y2 = ruta_
@@ -468,6 +509,19 @@ def text_svg(rader_, ankare, x, y_topp, fs, knut, namn_):
     return (f'<text class="{klass}" data-n="{html.escape(namn_)}" x="{x:.1f}" y="{y:.1f}" font-size="{fs}" '
             f'text-anchor="{ankare}">{spann}</text>')
 
+def knut_svg(k):
+    n = nod_info[k]
+    dn = f'data-n="{html.escape(n["namn"])}"'
+    if k not in kapsel:
+        return f'<circle class="knut" {dn} cx="{n["x"]:.1f}" cy="{n["y"]:.1f}" r="{n["radie"]:.1f}"/>'
+    # Kapsel: en tjock linje med runda ändar, först kanten och sedan det vita.
+    ut_ = ""
+    for klass, bredd_ in (("knut-kant", 2 * n["radie"] + 2.8), ("knut-band", 2 * n["radie"])):
+        for x2, y2 in kapsel[k]:
+            ut_ += (f'<line class="{klass}" {dn} x1="{n["x"]:.1f}" y1="{n["y"]:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                    f'stroke-width="{bredd_:.1f}"/>')
+    return ut_
+
 svg_ut = svg_ut.replace("</svg>",
     '<g class="hallplatser">'
     + "".join(f'<line class="hpl-kant L {" ".join("L-" + l for l in ls)}" data-n="{html.escape(nm)}" x1="{a[0]:.1f}" '
@@ -477,15 +531,15 @@ svg_ut = svg_ut.replace("</svg>",
     + "".join(f'<circle class="hpl L L-{l}" data-n="{html.escape(nm)}" cx="{x:.1f}" cy="{y:.1f}" r="{LB * 0.55:.2f}"/>'
               for l, (x, y), nm in prickar)
     + "</g>"
-    + '<g class="knutar">' + "".join(f'<circle class="knut" data-n="{html.escape(nod_info[k]["namn"])}" cx="{nod_info[k]["x"]:.1f}" cy="{nod_info[k]["y"]:.1f}" r="{nod_info[k]["radie"]:.1f}"/>'
-                                     for k in sorted(knutar)) + "</g>"
+    + '<g class="knutar">' + "".join(knut_svg(k) for k in sorted(knutar)) + "</g>"
     + '<g class="namn">' + "".join(text_svg(*e) for e in etiketter) + "</g></svg>")
 (ut / "karta.svg").write_text(svg_ut)
 json.dump({
     "storlek": [W, H],
     "linjebredd": LB,
-    "linjer": [{"namn": l, "farg": farger[l]["backgroundColor"], "text": farger[l].get("foregroundColor", "#000")}
-               for l in linjer],
+    # Linjer som inte ritas (ersättningsbussar och liknande) blir grå.
+    "linjer": [{"namn": l, "farg": farger.get(l, {}).get("backgroundColor", "#8a97a6"),
+                "text": farger.get(l, {}).get("foregroundColor", "#000")} for l in linjer],
     "stationer": [[n, round(x, 1), round(y, 1)] for n, x, y in stationer],
     "hopp": hopp_ut,
     "strackor": strackor,

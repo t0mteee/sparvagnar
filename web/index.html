@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Spårvagnar">
-<title>Spårvagnskartan</title>
+<meta name="apple-mobile-web-app-title" content="Trafiken">
+<title>Trafiken</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Martian+Mono:wght@400;600&display=swap">
@@ -38,12 +38,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--display); o
 
 /* transitmaps karta, omfärgad efter temat */
 #karta .transit-edge-outline, #karta .inner-geom-outline { stroke: var(--kant) !important; }
-#karta .transit-edge-outline.L-11, #karta .inner-geom-outline.L-11 { stroke: var(--svart-kant) !important; stroke-width: var(--kantbredd, 6.6px) !important; }
-:root[data-tema="dag"] #karta :is(.transit-edge-outline, .inner-geom-outline):is(.L-1, .L-X) { stroke: var(--vit-kant) !important; stroke-width: var(--kantbredd, 6.6px) !important; }
+/* Spårvagnslinje 11 är svart och 1 och X vita: de får en kant. Bara i Göteborg, där klasserna är spårvagnarnas. */
+:root[data-omrade="goteborg"] #karta .transit-edge-outline.L-11, :root[data-omrade="goteborg"] #karta .inner-geom-outline.L-11 { stroke: var(--svart-kant) !important; stroke-width: var(--kantbredd, 6.6px) !important; }
+:root[data-tema="dag"][data-omrade="goteborg"] #karta :is(.transit-edge-outline, .inner-geom-outline):is(.L-1, .L-X) { stroke: var(--vit-kant) !important; stroke-width: var(--kantbredd, 6.6px) !important; }
 #karta .hpl { fill: var(--prick); stroke: var(--prick-kant); stroke-width: 0.8; }
 #karta .hpl-kant { stroke: var(--prick-kant); stroke-linecap: round; }
 #karta .hpl-band { stroke: var(--prick); stroke-linecap: round; }
 #karta .knut { fill: var(--prick); stroke: var(--prick-kant); stroke-width: 1.4; }
+#karta .knut-kant { stroke: var(--prick-kant); stroke-linecap: round; }
+#karta .knut-band { stroke: var(--prick); stroke-linecap: round; }
 #karta .station-label { fill: var(--namn); font-family: var(--display); font-weight: 600; stroke: var(--bg); stroke-width: 2.4px; stroke-linejoin: round; paint-order: stroke; }
 #karta .station-label.knut { font-weight: 700; fill: var(--text); }
 #karta .line-label { font-family: var(--display); }
@@ -71,6 +74,14 @@ a { color: var(--signal); }
   padding: 9px 14px 11px; display: grid; gap: 1px; min-width: 0; max-width: calc(100% - 84px);
 }
 .topp h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.dold { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Flikarna för områdena, där rubriken annars står */
+.omraden { display: flex; gap: 5px; margin: 0 0 3px; }
+.omraden button {
+  min-height: 28px; padding: 2px 9px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); background: transparent;
+}
+.omraden button[aria-current="page"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .klocka { font-family: var(--mono); font-size: 32px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .topp.spelar .klocka { color: var(--signal); }
 .status { display: flex; gap: 4px 10px; align-items: baseline; flex-wrap: wrap; font-size: 16px; color: var(--muted); }
@@ -210,12 +221,13 @@ a { color: var(--signal); }
 </head>
 <body>
 <div class="app">
-  <div id="karta" aria-label="Schematisk karta över Göteborgs spårvagnsnät">
+  <div id="karta" aria-label="Schematisk linjekarta">
     <canvas id="vagnar"></canvas>
   </div>
 
   <header class="panel topp">
-    <h1>Spårvagnar i Göteborg</h1>
+    <h1 id="rubrik">Spårvagnar i Göteborg</h1>
+    <nav class="omraden" id="omraden" aria-label="Område" hidden></nav>
     <div class="klocka" id="klocka">--:--:--</div>
     <div class="status"><span><b id="antal">0</b> <span id="antal-text">spårvagnar ute</span></span><span class="lage" id="lage">Startar</span></div>
     <div class="meddelande" id="meddelande" hidden></div>
@@ -260,15 +272,15 @@ a { color: var(--signal); }
 
   <section class="panel om-ruta" id="om" hidden role="dialog" aria-labelledby="om-rubrik">
     <button class="stang" id="om-stang" aria-label="Stäng">✕</button>
-    <h2 id="om-rubrik">Spårvagnarna just nu</h2>
-    <p>Varje prick är en spårvagn som kör i Göteborg. Zooma in, så ser du vagnarna åka på sina linjer. Tryck två gånger snabbt för att zooma in, och på huset för att komma tillbaka till centrum.</p>
+    <h2 id="om-rubrik"><span class="ord-alla">Spårvagnarna</span> just nu</h2>
+    <p>Varje prick är <span class="ord-en">en spårvagn</span> som kör i <span class="omr-namn">Göteborg</span>. Zooma in, så ser du dem åka på sina linjer. Tryck två gånger snabbt för att zooma in, och på huset för att komma tillbaka till centrum.</p>
     <ul>
       <li><b>Tryck på en vagn</b> för att se vart den ska. Tryck på <b>Åk med</b>, så följer kartan vagnen.</li>
       <li><b>Tryck på en hållplats</b> för att se när nästa vagn kommer.</li>
       <li><b>Tryck på ett linjenummer</b> för att se hela linjen.</li>
       <li><b>1×</b> växlar till <b>10×</b> och <b>60×</b>, som spelar upp dagen snabbare. <b>Live</b> går tillbaka till nu.</li>
-      <li><b>Gråa</b> hållplatser och linjer har inga spårvagnar idag, till exempel när ett spår lagas.</li>
-      <li><b>Flaggan</b> ger dig ett uppdrag: hitta en viss spårvagn på kartan.</li>
+      <li><b>Gråa</b> hållplatser och linjer har inga <span class="ord-inga">spårvagnar</span> idag, till exempel när ett spår lagas.</li>
+      <li><b>Flaggan</b> ger dig ett uppdrag: hitta en viss vagn på kartan.</li>
     </ul>
     <h3>Tecken på kartan</h3>
     <ul>
@@ -277,7 +289,7 @@ a { color: var(--signal); }
       <li>En ihålig ring är en vagn som Västtrafik ser, men som inte gick att koppla till en tur i tidtabellen.</li>
     </ul>
     <h3>Om kartan</h3>
-    <p>Kartan är ritad av en dator ur tidtabellen, inte av Västtrafik, så den ser lite annorlunda ut än den officiella. Den officiella spårvagnskartan finns hos <a href="https://www.vasttrafik.se/reseplanering/mer-om-reseplanering/linjekartor/" target="_blank" rel="noopener">Västtrafik</a>.</p>
+    <p>Kartan är ritad av en dator ur tidtabellen, inte av Västtrafik, så den ser lite annorlunda ut än den officiella. Västtrafiks egna linjekartor finns hos <a href="https://www.vasttrafik.se/reseplanering/mer-om-reseplanering/linjekartor/" target="_blank" rel="noopener">Västtrafik</a>.</p>
     <p>Vagnarnas lägen kommer från Västtrafik var femte sekund. Tidtabellen kommer från Samtrafiken via Trafiklab. Layouten är gjord med LOOM från Freiburgs universitet. Vilken vagnmodell som kör finns inte i den öppna datan, så alla vagnar ritas likadant.</p>
   </section>
 </div>
@@ -292,6 +304,17 @@ a { color: var(--signal); }
   const las = (k, std) => { try { return localStorage.getItem(k) ?? std; } catch { return std; } };
   const spara = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  // Området: Göteborgs spårvagnar eller Kungsbackas bussar och tåg. Från adressen, annars det senast valda.
+  const OMRADE = new URLSearchParams(location.search).get("omrade") || las("omrade", "goteborg");
+  const Q = "omrade=" + encodeURIComponent(OMRADE);
+  // Vad fordonen heter, efter vilka slags fordon området har.
+  const ORD_TYP = { sparvagn: ["en spårvagn", "spårvagnar"], buss: ["en buss", "bussar"], tag: ["ett tåg", "tåg"] };
+  let ORDEN = { en: "en spårvagn", ental: "spårvagn", flera: "spårvagnar", inga: "spårvagnar", alla: "spårvagnarna" };
+  const stor = t => t[0].toUpperCase() + t.slice(1);
+  // Vita och svarta linjer (spårvagnarna 1, 11 och X) behöver en kant för att synas mot kartan.
+  const ljushet = f => { const n = parseInt(String(f).slice(1), 16) || 0; return (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255; };
+  const vit = l => ljushet(l.farg) > 0.9, svart = l => ljushet(l.farg) < 0.25;
+  const ordLinje = namn => ORD_TYP[linjeFor(namn).typ || "sparvagn"];
   let kartaFel = false, markerad = null, uppdrag = null, konfetti = [], faktaIdx = 0, senastAntalPerLinje = new Map();
 
   // ---------- Klockan ----------
@@ -329,7 +352,7 @@ a { color: var(--signal); }
   satTema(las("tema", timme >= 6 && timme < 20 ? "dag" : "natt"));
   $("tema").onclick = () => { satTema(T.namn === "dag" ? "natt" : "dag"); spara("tema", T.namn); };
 
-  // ---------- Ljud: en spårvagnsklocka, ding-ding ----------
+  // ---------- Ljud: en spårvagnsklocka, ding-ding, eller en tuta för bussar och tåg ----------
   let ljud = las("ljud", "pa") === "pa", ac = null;
   function visaLjud() { $("ljud").innerHTML = ljud ? IKON.klocka : IKON.tyst; $("ljud").setAttribute("aria-label", ljud ? "Stäng av ljudet" : "Slå på ljudet"); }
   visaLjud();
@@ -340,6 +363,22 @@ a { color: var(--signal); }
       ac = ac || new (window.AudioContext || window.webkitAudioContext)();
       if (ac.state === "suspended") ac.resume();
       const t0 = ac.currentTime + 0.02;
+      if (ORDEN.flera !== "spårvagnar") {
+        // Tut: två toner samtidigt, som en busstuta.
+        for (let n = 0; n < antal; n++) {
+          const start = t0 + n * 0.3;
+          for (const f of [349, 440]) {
+            const o = ac.createOscillator(), v = ac.createGain(), fl = ac.createBiquadFilter();
+            o.type = "sawtooth"; o.frequency.value = f; fl.type = "lowpass"; fl.frequency.value = 1400;
+            v.gain.setValueAtTime(0.0001, start);
+            v.gain.exponentialRampToValueAtTime(0.07, start + 0.02);
+            v.gain.setValueAtTime(0.07, start + 0.18);
+            v.gain.exponentialRampToValueAtTime(0.0001, start + 0.24);
+            o.connect(fl).connect(v).connect(ac.destination); o.start(start); o.stop(start + 0.3);
+          }
+        }
+        return;
+      }
       for (let n = 0; n < antal; n++) {
         const start = t0 + n * 0.26;
         for (const [f, g, d] of [[1568, 0.16, 0.9], [3136, 0.05, 0.45], [4704, 0.03, 0.25], [784, 0.05, 1.1]]) {
@@ -369,7 +408,7 @@ a { color: var(--signal); }
   async function hamtaDag() {
     for (;;) {
       try {
-        const r = await fetch("api/dag");
+        const r = await fetch(`api/dag?${Q}`);
         const j = await r.json();
         if (r.ok) return j;
         lageEl.textContent = "Laddar tidtabellen";
@@ -382,6 +421,7 @@ a { color: var(--signal); }
   let D, hopp, turer, linjer, stationer, stationTurer, linjeRuta, fakta = [], tysta = [];
   function lasIn(d) {
     D = d; linjer = d.linjer;
+    satOmrade();
     hopp = d.hopp.map(p => {
       const n = p.length / 2, acc = new Float64Array(n);
       for (let i = 1; i < n; i++) acc[i] = acc[i - 1] + Math.hypot(p[2*i] - p[2*i-2], p[2*i+1] - p[2*i-1]);
@@ -434,6 +474,40 @@ a { color: var(--signal); }
     svgEl.querySelectorAll("[data-s]").forEach(el => el.classList.toggle("tyst", !el.dataset.s.split(" ").some(i => korda.has(st[+i]))));
     svgEl.querySelectorAll("[data-n]").forEach(el => el.classList.toggle("tyst", !stannar.has(el.dataset.n)));
   }
+  // Områdets namn och fordonens namn i rubriken, flikarna och hjälptexten.
+  function satOmrade() {
+    const typer = new Set(linjer.map(l => l.typ || "sparvagn"));
+    ORDEN = typer.has("sparvagn") ? { en: "en spårvagn", ental: "spårvagn", flera: "spårvagnar", inga: "spårvagnar", alla: "spårvagnarna" }
+      : typer.has("tag") ? { en: "en buss eller ett tåg", ental: "buss eller tåg", flera: "bussar och tåg", inga: "bussar eller tåg", alla: "bussarna och tågen" }
+      : { en: "en buss", ental: "buss", flera: "bussar", inga: "bussar", alla: "bussarna" };
+    const omraden = D.omraden || [[OMRADE, "Göteborg"]], namn = (omraden.find(o => o[0] === D.omrade) || omraden[0])[1];
+    $("rubrik").textContent = `${stor(ORDEN.flera)} i ${namn}`;
+    document.documentElement.dataset.omrade = D.omrade || OMRADE;
+    document.title = `Trafiken i ${namn}`;
+    karta.setAttribute("aria-label", `Schematisk linjekarta över ${ORDEN.flera} i ${namn}`);
+    document.querySelectorAll(".ord-en").forEach(e => e.textContent = ORDEN.en);
+    document.querySelectorAll(".ord-inga").forEach(e => e.textContent = ORDEN.inga);
+    document.querySelectorAll(".ord-alla").forEach(e => e.textContent = stor(ORDEN.alla));
+    document.querySelectorAll(".omr-namn").forEach(e => e.textContent = namn);
+    // Flikar när det finns flera områden. Ett byte laddar om sidan med det nya området.
+    const nav = $("omraden");
+    nav.hidden = omraden.length < 2;
+    $("rubrik").classList.toggle("dold", omraden.length >= 2);
+    if (omraden.length >= 2 && !nav.children.length) for (const [nyckel, n] of omraden) {
+      const b = document.createElement("button");
+      b.textContent = n;
+      if (nyckel === D.omrade) b.setAttribute("aria-current", "page");
+      b.onclick = () => {
+        if (nyckel === D.omrade) return;
+        spara("omrade", nyckel);
+        try { history.replaceState(null, "", `?omrade=${encodeURIComponent(nyckel)}`); } catch {}
+        location.reload();
+      };
+      nav.appendChild(b);
+    }
+    spara("omrade", D.omrade || OMRADE);
+  }
+
   lageEl.textContent = "Laddar tidtabellen";
   lasIn(await hamtaDag());
   visaMeddelande("");
@@ -442,7 +516,7 @@ a { color: var(--signal); }
   // Kartan med layoutens version i adressen, så att en gammal kopia i cachen
   // aldrig visas under vagnar som räknats fram för en ny layout.
   lageEl.textContent = "Laddar kartan";
-  karta.insertAdjacentHTML("afterbegin", await (await fetch(`karta.svg?v=${encodeURIComponent(D.layout || "")}`, { cache: "no-store" })).text());
+  karta.insertAdjacentHTML("afterbegin", await (await fetch(`karta.svg?${Q}&v=${encodeURIComponent(D.layout || "")}`, { cache: "no-store" })).text());
   const svg = karta.querySelector("svg");
   const ruta = (svg.getAttribute("viewBox") || "").split(/[\s,]+/).map(Number);
   kartaFel = !(Math.abs(ruta[2] - W) <= 1 && Math.abs(ruta[3] - H) <= 1);
@@ -519,7 +593,7 @@ a { color: var(--signal); }
   async function hamtaLive() {
     if (document.visibilityState === "visible") {
       try {
-        const j = await (await fetch("api/live")).json();
+        const j = await (await fetch(`api/live?${Q}`)).json();
         live.fel = j.fel;
         if (j.layout && D.layout && j.layout !== D.layout) { location.reload(); return; }
         if (j.tid) {
@@ -552,12 +626,12 @@ a { color: var(--signal); }
       const morgon = antal < 12 ? { text: "Se morgonrusningen", gor: () => stall(7 * 3600 + 30 * 60, 10) } : null;
       if (!harLive() && live.fel) visaMeddelande(`Ingen realtid: ${esc(live.fel)} Visar tidtabellen.`, morgon);
       else if (!harLive() && live.hamtad) visaMeddelande("Realtiden har tystnat. Visar tidtabellen.", morgon);
-      else if (morgon) visaMeddelande("Nästan alla vagnar sover nu.", morgon);
+      else if (morgon) visaMeddelande(`Nästan alla ${ORDEN.flera} sover nu.`, morgon);
       else visaMeddelande("");
     }
     if (kartaFel) visaMeddelande("Kartan och vagnarna hör inte ihop.", { text: "Ladda om", gor: () => location.reload() });
     lageEl.textContent = text; lageEl.className = "lage " + klass;
-    $("antal-text").textContent = klocka.foljer ? (antal === 1 ? "spårvagn ute nu" : "spårvagnar ute nu") : "spårvagnar ute";
+    $("antal-text").textContent = `${antal === 1 ? ORDEN.ental : ORDEN.flera} ute${klocka.foljer ? " nu" : ""}`;
   }
 
   // ---------- Linjerna ----------
@@ -566,7 +640,7 @@ a { color: var(--signal); }
     linjer.forEach(l => {
       const b = document.createElement("button");
       b.className = "chip"; b.textContent = l.namn; b.style.background = l.farg; b.style.color = l.text;
-      b.style.boxShadow = l.namn === "11" || l.namn === "1" || l.namn === "X" ? "inset 0 0 0 1px #7b8a99" : "";
+      b.style.boxShadow = vit(l) || svart(l) ? "inset 0 0 0 1px #7b8a99" : "";
       b.setAttribute("aria-label", "Linje " + l.namn);
       b.onclick = () => {
         markerad = markerad === l.namn ? null : l.namn; markera();
@@ -593,7 +667,7 @@ a { color: var(--signal); }
     el.className = "fakta";
     const html = `<span class="etikett">Linje</span>${bricka(linjeFor(markerad), true)} `
       + (f.b ? `går mellan <b>${esc(f.b)}</b> och <b>${esc(f.a)}</b>` : `går till <b>${esc(f.a)}</b>`)
-      + ` och stannar vid ${f.hpl} hållplatser. ${ute === 1 ? "En vagn" : `<b>${ute}</b> vagnar`} är ute just nu.`;
+      + ` och stannar vid ${f.hpl} hållplatser. ${ute === 1 ? stor(ordLinje(markerad)[0]) : `<b>${ute}</b> ${ordLinje(markerad)[1]}`} är ute just nu.`;
     if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
   }
   function markera() {
@@ -605,7 +679,7 @@ a { color: var(--signal); }
     stil.textContent = markerad === null ? "" : `#karta .L:not(.L-${CSS.escape(markerad)}) { opacity: 0.13; }`;
   }
   const linjeFor = namn => linjer.find(x => x.namn === namn) || { namn, farg: "#8a97a6", text: "#0b1016" };
-  const bricka = (l, liten) => `<span class="bricka${liten ? " liten" : ""}" style="background:${l.farg};color:${l.text};${["1", "11", "X"].includes(l.namn) ? "box-shadow:inset 0 0 0 1px #7b8a99" : ""}">${esc(l.namn)}</span>`;
+  const bricka = (l, liten) => `<span class="bricka${liten ? " liten" : ""}" style="background:${l.farg};color:${l.text};${vit(l) || svart(l) ? "box-shadow:inset 0 0 0 1px #7b8a99" : ""}">${esc(l.namn)}</span>`;
 
   // ---------- Visste du? Fakta ur dagens tidtabell ----------
   function byggFakta() {
@@ -622,19 +696,19 @@ a { color: var(--signal); }
     const [topp, toppN] = [...perLinje].sort((a, b) => b[1] - a[1])[0];
     const namn = t => esc(D.namn[t.stopp[0]]), mot = t => esc(D.namn[t.mot]);
     fakta = [
-      () => `Idag gör spårvagnarna <b>${n.toLocaleString("sv-SE")} turer</b> i Göteborg.`,
+      () => `Idag gör ${ORDEN.alla} <b>${n.toLocaleString("sv-SE")} turer</b> här.`,
       () => `Flest avgångar idag har <b>${esc(flest)}</b>: ${flestN.toLocaleString("sv-SE")} stycken.`,
       () => `Längsta turen idag är linje <b>${esc(linjer[lang.linje].namn)}</b> från ${namn(lang)} till ${mot(lang)}. Den tar <b>${Math.round((lang.slut - lang.start) / 60)} minuter</b>.`,
-      () => forsta ? `Första vagnen idag går <b>${tid(forsta.start)}</b> från ${namn(forsta)}.` : "",
-      () => `Sista vagnen ikväll går <b>${tid(sista.start)}</b> från ${namn(sista)}.`,
+      () => forsta ? `Första turen idag går <b>${tid(forsta.start)}</b> från ${namn(forsta)}.` : "",
+      () => `Sista turen ikväll går <b>${tid(sista.start)}</b> från ${namn(sista)}.`,
       () => `Linje <b>${esc(linjer[topp].namn)}</b> kör flest turer idag: ${toppN.toLocaleString("sv-SE")} stycken.`,
       () => `Kartan har <b>${new Set(stationer.map(s => s.namn)).size} hållplatser</b>. Kan du hitta din?`,
-      () => tysta.length ? `Idag stannar inga spårvagnar vid <b>${tysta.length} ${tysta.length === 1 ? "hållplats" : "hållplatser"}</b>, `
+      () => tysta.length ? `Idag stannar inga ${ORDEN.inga} vid <b>${tysta.length} ${tysta.length === 1 ? "hållplats" : "hållplatser"}</b>, `
         + `till exempel <b>${esc(tysta[0])}</b>. De är gråa på kartan.` : "",
       () => {
         if (!visarLive()) return "";
         const v = [...live.vagnar.values()], sena = v.filter(x => x.tur >= 0 && x.fMal > 180).length;
-        return `Just nu är <b>${v.length} spårvagnar</b> ute. ${sena ? `${sena} av dem är mer än tre minuter sena.` : "Ingen av dem är mer än tre minuter sen."}`;
+        return `Just nu är <b>${v.length} ${ORDEN.flera}</b> ute. ${sena ? `${sena} av dem är mer än tre minuter sena.` : "Ingen av dem är mer än tre minuter sen."}`;
       },
     ];
   }
@@ -654,7 +728,7 @@ a { color: var(--signal); }
     if (!kandidater.length) { uppdrag = null; $("uppdrag").setAttribute("aria-pressed", "false"); nastaFakta(); return; }
     const v = kandidater[Math.floor(Math.random() * kandidater.length)];
     const linje = linjer[v.linje], motNamn = D.namn[v.tur.mot];
-    uppdrag = Math.random() < 0.6 ? { typ: "linje", linje: linje.namn } : { typ: "mot", namn: motNamn };
+    uppdrag = Math.random() < 0.6 ? { typ: "linje", linje: linje.namn } : { typ: "mot", namn: motNamn, linje: linje.namn };
     visaUppdrag();
   }
   function visaUppdrag(hittad) {
@@ -662,8 +736,8 @@ a { color: var(--signal); }
     el.className = "fakta uppdrag" + (hittad ? " hittad" : "");
     if (hittad) { el.innerHTML = `<span class="etikett">Hittad!</span>${bricka(hittad.linje, true)} mot ${esc(hittad.mot)}. Bra jobbat!`; return; }
     el.innerHTML = uppdrag.typ === "linje"
-      ? `<span class="etikett">Uppdrag</span>Hitta en spårvagn på linje ${bricka(linjeFor(uppdrag.linje), true)} och tryck på den.`
-      : `<span class="etikett">Uppdrag</span>Hitta en spårvagn som är på väg till <b>${esc(uppdrag.namn)}</b>.`;
+      ? `<span class="etikett">Uppdrag</span>Hitta ${ordLinje(uppdrag.linje)[0]} på linje ${bricka(linjeFor(uppdrag.linje), true)} och tryck på den.`
+      : `<span class="etikett">Uppdrag</span>Hitta ${uppdrag.linje ? ordLinje(uppdrag.linje)[0] : ORDEN.en} som är på väg till <b>${esc(uppdrag.namn)}</b>.`;
   }
   function provaUppdrag(id, sx, sy) {
     if (!uppdrag) return;
@@ -922,7 +996,7 @@ a { color: var(--signal); }
     const nytt = sattHtml("k-innehall", lista.length ? `<ul class="tavla">${lista.slice(0, 8).map((a, n) =>
       `<li data-n="${n}">${bricka(linjer[a.tur.linje], true)}<span class="mot">${esc(D.namn[a.tur.mot])}</span>`
       + `<span class="om${a.avg - t < 60 ? " nu" : ""}">${a.avg - t > 1200 ? tid(a.avg) : omMin(a.avg, t)}${a.f > 120 ? ` <span class="sen">+${Math.round(a.f / 60)}</span>` : ""}</span></li>`).join("")}</ul>`
-      : `<p class="tom">${tysta.includes(namn) ? "Inga spårvagnar stannar här idag. Därför är hållplatsen grå på kartan." : "Inga avgångar den närmaste timmen."}</p>`);
+      : `<p class="tom">${tysta.includes(namn) ? `Inga ${ORDEN.inga} stannar här idag. Därför är hållplatsen grå på kartan.` : "Inga avgångar den närmaste timmen."}</p>`);
     if (nytt) $("k-innehall").querySelectorAll(".tavla li").forEach(li => li.onclick = () => {
       const a = lista[+li.dataset.n];
       valj({ typ: "vagn", id: a.id }); ding(1);
@@ -993,28 +1067,28 @@ a { color: var(--signal); }
     }
     const farg = v => linjer[v.linje] || { namn: "?", farg: "#8a97a6", text: "#0b1016" };
     const av = v => markerad !== null && markerad !== farg(v).namn;
-    // Inzoomat, eller för den valda linjen, ritas vagnarna som ledade spårvagnar.
+    // Inzoomat, eller för den valda linjen, ritas vagnarna som riktiga fordon.
     const somVagn = v => v.tur && !v.los && (vy.k >= 0.9 || (markerad !== null && markerad === farg(v).namn) || v.id === folj);
     const valdId = valt && valt.typ === "vagn" ? valt.id : null;
     for (const v of synliga) {
       if (somVagn(v)) continue;
       const l = farg(v);
       ctx.globalAlpha = av(v) ? 0.12 : 0.22;
-      ctx.fillStyle = l.namn === "11" && T.namn === "natt" ? "#9aa8b6" : l.farg;
+      ctx.fillStyle = svart(l) && T.namn === "natt" ? "#9aa8b6" : l.farg;
       ctx.beginPath(); ctx.arc(v.sx, v.sy, r * 1.9, 0, 6.2832); ctx.fill();
     }
     for (const v of synliga) {
       const l = farg(v), vald_ = v.id === valdId;
       ctx.globalAlpha = av(v) ? 0.2 : 1;
-      if (somVagn(v)) { ritaSparvagn(v, l, vald_, nuMs); continue; }
+      if (somVagn(v)) { ritaFordon(v, l, vald_, nuMs); continue; }
       v.hx = v.hy = undefined;
       if (v.sen > 180) { ctx.strokeStyle = T.signal; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(v.sx, v.sy, r * 1.5, 0, 6.2832); ctx.stroke(); }
-      const ljusKant = (l.namn === "11" && T.namn === "natt") || (["1", "X"].includes(l.namn) && T.namn === "dag");
+      const ljusKant = (svart(l) && T.namn === "natt") || (vit(l) && T.namn === "dag");
       ctx.fillStyle = v.los ? T.bg : l.farg;
       ctx.strokeStyle = vald_ ? T.signal : v.los ? l.farg : ljusKant ? "#8a98a6" : T.kant;
       ctx.lineWidth = vald_ ? 3.5 : v.los ? 2.5 : 1.5;
       ctx.beginPath(); ctx.arc(v.sx, v.sy, vald_ ? r * 1.35 : r, 0, 6.2832); ctx.fill(); ctx.stroke();
-      if (r >= 9 && !v.los) {
+      if (r >= 9 && !v.los && l.namn.length <= 3) {
         ctx.fillStyle = l.text; ctx.font = `700 ${Math.round(r * 1.15)}px "Barlow Condensed", sans-serif`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(l.namn, v.sx, v.sy + 0.5);
       }
@@ -1035,16 +1109,23 @@ a { color: var(--signal); }
     requestAnimationFrame(rita);
   }
 
-  // En ledad spårvagn i tre moduler som var för sig följer spåret bakom fronten.
+  // Fordonen ritas i moduler som var för sig följer spåret bakom fronten: en ledad
+  // spårvagn i tre, en buss i en och ett tåg i fyra. Längden är minst min skärmpunkter.
   // Vilken modell som kör finns inte i Västtrafiks öppna data, så formen är densamma för alla.
-  function ritaSparvagn(v, l, vald_, nuMs) {
-    const langd = Math.max(48, 38 * vy.k) / vy.k, glapp = langd * 0.03, modul = (langd - 2 * glapp) / 3;
+  const FORM = {
+    sparvagn: { moduler: 3, min: 48, skala: 38, fram: 1.3, bak: 1 },
+    buss: { moduler: 1, min: 24, skala: 17, fram: 0.9, bak: 0.6 },
+    tag: { moduler: 4, min: 66, skala: 56, fram: 1.7, bak: 1.7 },
+  };
+  function ritaFordon(v, l, vald_, nuMs) {
+    const form = FORM[l.typ] || FORM.sparvagn, n = form.moduler, mitt = Math.floor((n - 1) / 2);
+    const langd = Math.max(form.min, form.skala * vy.k) / vy.k, glapp = langd * 0.03, modul = (langd - (n - 1) * glapp) / n;
     const bredd_ = Math.max(9, 1.6 * LB * vy.k), radie = bredd_ * 0.38;
     const star = v.lg.star !== undefined, natt = T.namn === "natt";
-    const ljusKant = (l.namn === "11" && natt) || (["1", "X"].includes(l.namn) && !natt);
+    const ljusKant = (svart(l) && natt) || (vit(l) && !natt);
     const kant = ljusKant ? "#8a98a6" : T.kant;
     let fram0 = null, riktning = 0, mittvinkel = 0;
-    for (let j = 2; j >= 0; j--) {
+    for (let j = n - 1; j >= 0; j--) {
       const fram = bakom(v.tur, v.lg.k, v.lg.s, j * (modul + glapp)), bak = bakom(v.tur, v.lg.k, v.lg.s, j * (modul + glapp) + modul);
       const fx = (fram[0] - vy.x) * vy.k, fy = (fram[1] - vy.y) * vy.k, bx = (bak[0] - vy.x) * vy.k, by = (bak[1] - vy.y) * vy.k;
       const len = Math.max(4, Math.hypot(fx - bx, fy - by)), vinkel = Math.atan2(fy - by, fx - bx);
@@ -1062,11 +1143,12 @@ a { color: var(--signal); }
       }
       ctx.fillStyle = l.farg; ctx.strokeStyle = kant; ctx.lineWidth = 1.3;
       ctx.beginPath();
-      ctx.roundRect(-len / 2, -bredd_ / 2, len, bredd_, j === 0 ? [radie * 0.5, radie * 1.3, radie * 1.3, radie * 0.5]
-        : j === 2 ? [radie, radie * 0.5, radie * 0.5, radie] : radie * 0.5);
+      const bak_ = radie * form.bak, fram_ = radie * form.fram, led = radie * 0.5;
+      ctx.roundRect(-len / 2, -bredd_ / 2, len, bredd_, n === 1 ? [bak_, fram_, fram_, bak_]
+        : j === 0 ? [led, fram_, fram_, led] : j === n - 1 ? [bak_, led, led, bak_] : led);
       ctx.fill(); ctx.stroke();
       // Fönsterband; vid hållplats lyser det, dörrarna är öppna.
-      ctx.fillStyle = star ? "rgba(255,226,140,0.85)" : l.namn === "11" ? "rgba(200,214,226,0.3)" : "rgba(8,14,20,0.32)";
+      ctx.fillStyle = star ? "rgba(255,226,140,0.85)" : svart(l) ? "rgba(200,214,226,0.3)" : "rgba(8,14,20,0.32)";
       ctx.fillRect(-len / 2 + bredd_ * 0.25, -bredd_ * 0.17, len - bredd_ * 0.5, bredd_ * 0.34);
       if (star && bredd_ >= 11) { // dörrar
         ctx.fillStyle = "rgba(255,240,190,0.95)";
@@ -1076,18 +1158,18 @@ a { color: var(--signal); }
         ctx.fillStyle = "#fff6d6";
         ctx.beginPath(); ctx.arc(len / 2 - 1.6, -bredd_ * 0.3, 1.2, 0, 6.2832); ctx.arc(len / 2 - 1.6, bredd_ * 0.3, 1.2, 0, 6.2832); ctx.fill();
       }
-      if (j === 2 && bredd_ >= 10) { // bakljus
+      if (j === n - 1 && bredd_ >= 10) { // bakljus
         ctx.fillStyle = "#ff4d4d";
         ctx.fillRect(-len / 2 + 0.6, -bredd_ * 0.36, 1.4, 1.8); ctx.fillRect(-len / 2 + 0.6, bredd_ * 0.36 - 1.8, 1.4, 1.8);
       }
       ctx.restore();
-      if (j === 1) {
+      if (j === mitt) {
         v.hx = (fx + bx) / 2; v.hy = (fy + by) / 2; mittvinkel = vinkel;
-        if (bredd_ >= 12) {
+        if (bredd_ >= 12 && l.namn.length <= 3) {
           ctx.font = `700 ${Math.round(bredd_ * 0.9)}px "Barlow Condensed", sans-serif`;
           ctx.textAlign = "center"; ctx.textBaseline = "middle";
-          ctx.lineWidth = 3; ctx.strokeStyle = l.namn === "11" ? "#0b1016" : "rgba(11,16,22,0.55)"; ctx.strokeText(l.namn, v.hx, v.hy + 0.5);
-          ctx.fillStyle = l.namn === "11" ? "#ffffff" : l.text; ctx.fillText(l.namn, v.hx, v.hy + 0.5);
+          ctx.lineWidth = 3; ctx.strokeStyle = svart(l) ? "#0b1016" : "rgba(11,16,22,0.55)"; ctx.strokeText(l.namn, v.hx, v.hy + 0.5);
+          ctx.fillStyle = svart(l) ? "#ffffff" : l.text; ctx.fillText(l.namn, v.hx, v.hy + 0.5);
         }
       }
     }

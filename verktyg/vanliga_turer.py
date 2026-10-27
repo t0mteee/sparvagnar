@@ -7,8 +7,9 @@ vagnhallen och vändslingor. Ritas allt blir knippena breda av linjer som nästa
 aldrig går där. Här räknas de närmaste veckorna (åtta veckor från i dag om
 inget annat anges). En sträcka hör till det vanliga nätet om minst ANDEL av
 linjens turer kör den, på minst hälften av de dagar linjen går. Bara turer där
-varje sträcka hör till det vanliga nätet behålls. Extralinjen X och
-säsongslinjen 13 ritas inte.
+varje sträcka hör till det vanliga nätet behålls. Linjer som går färre än
+hälften av dagarna, som ersättningsbussar, ritas inte, och inte heller
+extralinjen X och säsongslinjen 13.
 
 Vagnarna på de turer som tas bort får ändå en väg: bygg_layout.py lånar då en
 annan linjes väg mellan samma hållplatser.
@@ -69,7 +70,7 @@ kalender = list(rader("calendar.txt"))
 undantag = defaultdict(dict)
 for r in rader("calendar_dates.txt"):
     undantag[r["date"]][r["service_id"]] = r["exception_type"]
-dagar_linje, dagar_stracka, i_fonstret = Counter(), Counter(), set()
+dagar_linje, dagar_stracka, i_fonstret, antal_dagar = Counter(), Counter(), set(), 0
 d = forsta
 while d <= sista:
     ds = d.strftime("%Y%m%d")
@@ -78,6 +79,7 @@ while d <= sista:
     for s, typ in undantag[ds].items():
         (aktiva.add if typ == "1" else aktiva.discard)(s)
     i_fonstret |= aktiva
+    antal_dagar += 1
     antal, anvant = Counter(), Counter()
     for tj in aktiva:
         antal.update(turer_per[tj])
@@ -88,7 +90,8 @@ while d <= sista:
 
 vanlig = {k for k, n in dagar_stracka.items() if n >= dagar_linje[k[0]] / 2}
 behall = {tur for tur, s in strackor.items()
-          if turer[tur][0] not in UTAN and all((turer[tur][0], p) in vanlig for p in s)}
+          if turer[tur][0] not in UTAN and dagar_linje[turer[tur][0]] >= antal_dagar / 2
+          and all((turer[tur][0], p) in vanlig for p in s)}
 print(f"{forsta}–{sista}: behåller {len(behall)} av {len(turer)} turer", file=sys.stderr)
 for l in sorted(set(linje.values()), key=lambda s: s.zfill(3)):
     alla = [t for t, (l_, tj) in turer.items() if l_ == l and tj in i_fonstret]

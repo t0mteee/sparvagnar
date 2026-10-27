@@ -12,6 +12,21 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 SPARVAGN = {"0"} | {str(t) for t in range(900, 907)}
+BUSS = {"3"} | {str(t) for t in range(700, 717)}
+TAG = {"2"} | {str(t) for t in range(100, 118)}
+# Tågen heter "TÅG" i tidtabellen; tågbolaget skiljer dem åt.
+TAGNAMN = {"Västtågen": "Tåg", "Öresundståg": "Öresund"}
+
+
+def linjenamn(route):
+    """Linjens namn på kartan: linjenumret, och för tåg tågbolaget."""
+    if route["route_type"] in TAG and route["route_short_name"] in ("", "TÅG"):
+        return TAGNAMN.get(route.get("route_long_name", ""), "Tåg")
+    return route["route_short_name"]
+
+
+def fordonstyp(route_type):
+    return "sparvagn" if route_type in SPARVAGN else "tag" if route_type in TAG else "buss"
 VECKODAG = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 # Lokala meter runt Göteborg, räcker för avstånd inom staden.
@@ -55,15 +70,22 @@ def _tjanster(z, d):
     return aktiva
 
 
-def bygg_dag(zip_path, dag):
-    """Spårvagnsturerna för dag, med hållplatser, tider, avstånd längs spåret och form.
+def bygg_dag(zip_path, dag, typer=SPARVAGN, ruta=None):
+    """Dagens turer av de valda slagen, med hållplatser, tider, avstånd längs spåret och form.
 
-    Returnerar {"dag", "version", "turer", "former", "stationer"} där varje tur är
-    {"linje", "mot", "skylt", "form", "stopp": [(namn, ankomst, avgång, avstånd)]}.
+    Med ruta (syd, väst, nord, öst) tas bara turer som stannar inom rutan, även
+    de som bara stannar en gång där (tåg och expressbussar), så att de syns på
+    avgångstavlan. Turen behåller alla sina hållplatser, så att slutstationen
+    syns, men "inne" säger vilka som ligger inom rutan.
+
+    Returnerar {"dag", "version", "turer", "former", "stationer", "typer"} där varje tur är
+    {"linje", "mot", "skylt", "form", "stopp": [(namn, ankomst, avgång, avstånd)], "inne": [bool]}.
     """
     z = zipfile.ZipFile(zip_path)
     feed = next(_rader(z, "feed_info.txt"), {}) if "feed_info.txt" in z.namelist() else {}
-    linje = {r["route_id"]: r["route_short_name"] for r in _rader(z, "routes.txt") if r["route_type"] in SPARVAGN}
+    routes = {r["route_id"]: r for r in _rader(z, "routes.txt") if r["route_type"] in typer}
+    linje = {rid: linjenamn(r) for rid, r in routes.items()}
+    typ = {linje[rid]: fordonstyp(r["route_type"]) for rid, r in routes.items()}
     idag, igar = _tjanster(z, dag), _tjanster(z, dag - timedelta(days=1))
 
     # En tur kan gå båda dagarna (samma service_id måndag–fredag). Då tas den med
@@ -82,14 +104,28 @@ def bygg_dag(zip_path, dag):
         s = stopp[stop_id]
         return stopp[s["parent_station"]] if s.get("parent_station") else s
 
-    anrop = defaultdict(list)
-    for r in _rader(z, "stop_times.txt"):
-        if r["trip_id"] in turer:
-            anrop[r["trip_id"]].append((int(r["stop_sequence"]), station(r["stop_id"])["stop_name"],
-                                        _sek(r["arrival_time"]), _sek(r["departure_time"]),
-                                        float(r.get("shape_dist_traveled") or 0), r.get("stop_headsign", "")))
+    def inom(stop_id):
+        s = stopp[stop_id]
+        return ruta is None or (ruta[0] <= float(s["stop_lat"]) <= ruta[2] and ruta[1] <= float(s["stop_lon"]) <= ruta[3])
 
-    behov = {form for _, form, _ in turer.values()}
+    # stop_times är grupperad per tur. Turer som inte stannar inom rutan släpps
+    # direkt, så att inte alla regionens bussar hålls i minnet.
+    anrop, forra = defaultdict(list), None
+    for r in _rader(z, "stop_times.txt"):
+        tur = r["trip_id"]
+        if tur not in turer:
+            continue
+        if tur != forra:
+            if forra and not any(a[6] for a in anrop[forra]):
+                del anrop[forra]
+            forra = tur
+        anrop[tur].append((int(r["stop_sequence"]), station(r["stop_id"])["stop_name"],
+                           _sek(r["arrival_time"]), _sek(r["departure_time"]),
+                           float(r.get("shape_dist_traveled") or 0), r.get("stop_headsign", ""), inom(r["stop_id"])))
+    if forra and not any(a[6] for a in anrop[forra]):
+        del anrop[forra]
+
+    behov = {turer[t][1] for t in anrop}
     punkter = defaultdict(list)
     for r in _rader(z, "shapes.txt"):
         if r["shape_id"] in behov:
@@ -116,18 +152,20 @@ def bygg_dag(zip_path, dag):
             if a[-1][2] + forskj < 0:  # gårdagens tur som slutade före midnatt
                 continue
             resultat.append({
-                "linje": linje_, "mot": a[-1][1], "skylt": a[0][5], "form": form,
-                "stopp": [(n, ank + forskj, avg + forskj, d) for _, n, ank, avg, d, _ in a],
+                "linje": linje_, "mot": a[-1][1], "skylt": a[0][5] or a[-1][1], "form": form,
+                "stopp": [(n, ank + forskj, avg + forskj, d) for _, n, ank, avg, d, _, _ in a],
+                "inne": [x[6] for x in a],
             })
     resultat.sort(key=lambda t: t["stopp"][0][2])
 
-    namn_i_bruk = {s[0] for t in resultat for s in t["stopp"]}
+    # Hållplatserna inom rutan, med läge i meter.
+    namn_i_bruk = {s[0] for t in resultat for s, i in zip(t["stopp"], t["inne"]) if i}
     stationer = {}
     for s in stopp.values():
-        if s["stop_name"] in namn_i_bruk and not s.get("parent_station"):
+        if s["stop_name"] in namn_i_bruk and not s.get("parent_station") and inom(s["stop_id"]):
             stationer[s["stop_name"]] = meter(float(s["stop_lat"]), float(s["stop_lon"]))
-    return {"dag": dag.isoformat(), "version": feed.get("feed_version", ""),
-            "turer": resultat, "former": former, "stationer": stationer}
+    return {"dag": dag.isoformat(), "version": feed.get("feed_version", ""), "turer": resultat,
+            "former": former, "stationer": stationer, "typer": typ}
 
 
 def klientdata(dag, layout):
@@ -168,14 +206,17 @@ def klientdata(dag, layout):
         for _, ank, avg, _ in st:
             tider += [ank - forra, avg - ank]
             forra = avg
+        inne = t.get("inne") or [True] * len(st)
         turer.append([linjer.index(t["linje"]), namn_idx[t["mot"]], st[0][2],
-                      [hopp_for(t["linje"], a[0], b[0]) for a, b in zip(st, st[1:])],
+                      [hopp_for(t["linje"], a[0], b[0]) if i and j else -1
+                       for a, b, i, j in zip(st, st[1:], inne, inne[1:])],
                       [namn_idx[s[0]] for s in st], tider])
     return {
         "dag": dag["dag"], "version": dag["version"], "storlek": layout["storlek"],
         "linjebredd": layout.get("linjebredd", 4.4),
         "linjer": [{"namn": l, "farg": farger.get(l, {}).get("farg", "#8a97a6"),
-                    "text": farger.get(l, {}).get("text", "#0b1016")} for l in linjer],
+                    "text": farger.get(l, {}).get("text", "#0b1016"),
+                    "typ": dag.get("typer", {}).get(l, "sparvagn")} for l in linjer],
         "namn": namn,
         "stationer": [[namn_idx[n], x, y] for n, x, y in layout["stationer"]],
         "hopp": hopp,

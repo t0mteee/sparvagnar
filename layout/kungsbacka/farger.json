@@ -1,0 +1,114 @@
+{
+ "1": {
+  "backgroundColor": "#3cb44b",
+  "foregroundColor": "#ffffff"
+ },
+ "2": {
+  "backgroundColor": "#ffe119",
+  "foregroundColor": "#0b1016"
+ },
+ "3": {
+  "backgroundColor": "#ffe119",
+  "foregroundColor": "#0b1016"
+ },
+ "4": {
+  "backgroundColor": "#42d4f4",
+  "foregroundColor": "#0b1016"
+ },
+ "442": {
+  "backgroundColor": "#800000",
+  "foregroundColor": "#ffffff"
+ },
+ "5": {
+  "backgroundColor": "#9a6324",
+  "foregroundColor": "#ffffff"
+ },
+ "614": {
+  "backgroundColor": "#3cb44b",
+  "foregroundColor": "#ffffff"
+ },
+ "615": {
+  "backgroundColor": "#911eb4",
+  "foregroundColor": "#ffffff"
+ },
+ "717": {
+  "backgroundColor": "#f032e6",
+  "foregroundColor": "#ffffff"
+ },
+ "720": {
+  "backgroundColor": "#9a6324",
+  "foregroundColor": "#ffffff"
+ },
+ "730": {
+  "backgroundColor": "#4363d8",
+  "foregroundColor": "#ffffff"
+ },
+ "731": {
+  "backgroundColor": "#e6a100",
+  "foregroundColor": "#0b1016"
+ },
+ "732": {
+  "backgroundColor": "#f58231",
+  "foregroundColor": "#0b1016"
+ },
+ "733": {
+  "backgroundColor": "#800000",
+  "foregroundColor": "#ffffff"
+ },
+ "734": {
+  "backgroundColor": "#bfef45",
+  "foregroundColor": "#0b1016"
+ },
+ "735": {
+  "backgroundColor": "#e6194b",
+  "foregroundColor": "#ffffff"
+ },
+ "740": {
+  "backgroundColor": "#f58231",
+  "foregroundColor": "#0b1016"
+ },
+ "741": {
+  "backgroundColor": "#808000",
+  "foregroundColor": "#ffffff"
+ },
+ "742": {
+  "backgroundColor": "#911eb4",
+  "foregroundColor": "#ffffff"
+ },
+ "743": {
+  "backgroundColor": "#e6a100",
+  "foregroundColor": "#0b1016"
+ },
+ "744": {
+  "backgroundColor": "#42d4f4",
+  "foregroundColor": "#0b1016"
+ },
+ "745": {
+  "backgroundColor": "#4363d8",
+  "foregroundColor": "#ffffff"
+ },
+ "746": {
+  "backgroundColor": "#f032e6",
+  "foregroundColor": "#ffffff"
+ },
+ "747": {
+  "backgroundColor": "#e6194b",
+  "foregroundColor": "#ffffff"
+ },
+ "748": {
+  "backgroundColor": "#469990",
+  "foregroundColor": "#ffffff"
+ },
+ "Tåg": {
+  "backgroundColor": "#1f3a93",
+  "foregroundColor": "#ffffff"
+ },
+ "X3": {
+  "backgroundColor": "#469990",
+  "foregroundColor": "#ffffff"
+ },
+ "Öresund": {
+  "backgroundColor": "#6b6f78",
+  "foregroundColor": "#ffffff"
+ }
+}

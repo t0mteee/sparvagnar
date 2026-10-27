@@ -2,7 +2,8 @@
 
 Varje vagn som Västtrafik rapporterar kopplas till den tur i tidtabellen som
 den troligast kör: samma linje, samma skylt, och närmast i tid där positionen
-ligger längs turens spår. Skillnaden mellan när turen enligt tidtabellen
+ligger längs turens spår. Tåg rapporteras med tågnummer i stället för linje,
+så de jämförs med alla tågturer. Skillnaden mellan när turen enligt tidtabellen
 skulle vara där och nu är vagnens försening. Sidan visar sedan turen
 förskjuten med förseningen, så vagnen rör sig mjukt mellan uppdateringarna.
 """
@@ -18,8 +19,6 @@ import urllib.request
 from tidtabell import meter
 
 API = "https://ext-api.vasttrafik.se"
-# Spårvägsnätet i två rutor; ett anrop ger högst 200 turer.
-RUTOR = [(57.60, 11.80, 57.83, 11.97), (57.60, 11.97, 57.83, 12.12)]
 MAX_AVSTAND = 150      # meter från turens spår
 TIDIG, SEN = -600, 3600
 ANNAN_SKYLT = 240      # sekunder: en tur med annan skylt godtas bara om tiden stämmer så här väl
@@ -41,11 +40,12 @@ class Vasttrafik:
         self.token, self.giltig = svar["access_token"], time.time() + int(svar.get("expires_in", 3600))
         return self.token
 
-    def positioner(self):
+    def positioner(self, rutor, lagen):
+        """Fordonen i rutorna (syd, väst, nord, öst), av slagen i lagen (tram, bus, train)."""
         vagnar = {}
-        for lat1, lon1, lat2, lon2 in RUTOR:
+        for lat1, lon1, lat2, lon2 in rutor:
             q = urllib.parse.urlencode({"lowerLeftLat": lat1, "lowerLeftLong": lon1, "upperRightLat": lat2,
-                                        "upperRightLong": lon2, "transportModes": "tram", "limit": 200})
+                                        "upperRightLong": lon2, "transportModes": lagen, "limit": 200}, doseq=True)
             req = urllib.request.Request(f"{API}/pr/v4/positions?{q}",
                                          headers={"Authorization": f"Bearer {self._token()}"})
             try:
@@ -108,6 +108,7 @@ class Matchning:
         self.per_linje = {}
         for i, t in enumerate(dag["turer"]):
             self.per_linje.setdefault(t["linje"], []).append(i)
+        self.tag = [i for i, t in enumerate(dag["turer"]) if dag.get("typer", {}).get(t["linje"]) == "tag"]
         self.koppling = {}  # detailsReference -> turindex
 
     def _kandidat(self, i, p, nu, skylt, forra):
@@ -125,7 +126,9 @@ class Matchning:
             return None
         # En vagn med en skylt som ingen tur i tidtabellen har (till exempel vid en
         # omledning) får inte kopplas till en tur åt andra hållet med stor försening.
-        samma_skylt = skylt == _norm(t["skylt"])
+        # Skylten kan vara kortare än turens, som "Göteborg" för "Göteborg Central".
+        t_skylt = _norm(t["skylt"])
+        samma_skylt = skylt == t_skylt or bool(skylt and t_skylt) and (t_skylt.startswith(skylt) or skylt.startswith(t_skylt))
         if not samma_skylt and abs(forsening) > ANNAN_SKYLT:
             return None
         poang = abs(forsening) + avst * 2 + (0 if samma_skylt else 900)
@@ -151,7 +154,8 @@ class Matchning:
         for v in vagnar:
             p = meter(v["latitude"], v["longitude"])
             skylt, forra = _norm(v.get("direction", "")), self.koppling.get(v["detailsReference"])
-            for i in self.per_linje.get(v["line"]["name"], []):
+            tag = v["line"].get("transportMode") == "train"
+            for i in self.tag if tag else self.per_linje.get(v["line"]["name"], []):
                 k = self._kandidat(i, p, nu, skylt, forra)
                 if k:
                     forslag.append((k[0], v["detailsReference"], i, k[1]))
@@ -169,6 +173,7 @@ class Matchning:
                     "m": v.get("direction", "")}
             if ref in vald:
                 post["tur"], post["f"] = vald[ref][0], round(vald[ref][1])
+                post["l"] = self.dag["turer"][vald[ref][0]]["linje"]
                 self.koppling[ref] = vald[ref][0]
             else:
                 p = meter(v["latitude"], v["longitude"])

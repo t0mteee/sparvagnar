@@ -1,16 +1,17 @@
-"""Spårvagnskartan: sidan, dagens tidtabell och Västtrafiks positioner.
+"""Kartan: sidan, dagens tidtabell och Västtrafiks positioner, för flera områden.
 
 Körs i Docker på servern (se docker-compose.yml). Håller nycklarna på
 serversidan. Bara standardbiblioteket, ingen pip.
 
-  GET /             sidan (web/index.html, läses per anrop)
-  GET /karta.svg    kartan (layout/karta.svg)
-  GET /api/dag      dagens turer, vägar och linjer
-  GET /api/live     senaste positionerna, kopplade till turerna
-  GET /api/status   vad servern håller på med
+  GET /                     sidan (web/index.html, läses per anrop)
+  GET /karta.svg?omrade=    områdets karta
+  GET /api/dag?omrade=      dagens turer, vägar och linjer
+  GET /api/live?omrade=     senaste positionerna, kopplade till turerna
+  GET /api/status           vad servern håller på med, per område
 
-Tidtabellen hämtas från Trafiklab högst en gång per dygn. Positionerna
-hämtas var 5:e sekund, men bara medan någon har sidan öppen.
+omrade är goteborg (spårvagnarna, standard) eller kungsbacka (bussar och tåg),
+se omraden.py. Tidtabellen hämtas från Trafiklab högst en gång per dygn.
+Positionerna hämtas var 5:e sekund, men bara för områden som någon har öppna.
 """
 import gzip
 import hashlib
@@ -20,6 +21,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.parse
 import urllib.request
 from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import realtid  # noqa: E402
 import tidtabell  # noqa: E402
+from omraden import OMRADEN  # noqa: E402
 
 ROT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("DATA", ROT / "data"))
@@ -37,25 +40,37 @@ VT_HEMLIGHET = os.environ.get("VASTTRAFIK_SECRET", "")
 TL_NYCKEL = os.environ.get("TRAFIKLAB_KEY", "")
 ZIP = DATA / "vt.zip"
 INTERVALL = 5
-# Kartan och layouten läses en gång, tillsammans, och får ett gemensamt
-# versionsnummer. Sidan hämtar kartan med versionen i adressen, så att en
-# gammal kopia i webbläsarens cache aldrig kan blandas med nya vagnlägen.
-KARTA = (ROT / "layout" / "karta.svg").read_bytes()
-LAYOUT_TEXT = (ROT / "layout" / "layout.json").read_bytes()
-LAYOUT = json.loads(LAYOUT_TEXT)
-LAYOUT_VERSION = hashlib.sha1(KARTA + LAYOUT_TEXT).hexdigest()[:12]
 FEL_NYCKEL = "VASTTRAFIK_KEY och VASTTRAFIK_SECRET saknas i .env."
 TITTAR_S = 60          # så länge efter senaste anropet räknas sidan som öppen
+STANDARD = "goteborg"
 
 lager = threading.Lock()
-tillstand = {
-    "dag": None,         # intern dagsdata
-    "klient": None,      # gzippad JSON till sidan
-    "matchning": None,
-    "live": {"vagnar": [], "tid": 0},
-    "tittare": 0.0,
-    "status": {"tidtabell": "startar", "realtid": "väntar"},
-}
+
+
+class Omrade:
+    """Ett områdes karta, dagens tidtabell och senaste positioner."""
+
+    def __init__(self, nyckel, conf):
+        self.nyckel, self.conf = nyckel, conf
+        mapp = ROT / conf["layout"]
+        # Kartan och layouten läses en gång, tillsammans, och får ett gemensamt
+        # versionsnummer. Sidan hämtar kartan med versionen i adressen, så att en
+        # gammal kopia i webbläsarens cache aldrig kan blandas med nya vagnlägen.
+        self.karta = (mapp / "karta.svg").read_bytes()
+        text = (mapp / "layout.json").read_bytes()
+        self.layout = json.loads(text)
+        self.version = hashlib.sha1(self.karta + text).hexdigest()[:12]
+        self.dag = None          # intern dagsdata
+        self.klient = None       # gzippad JSON till sidan
+        self.matchning = None
+        self.live = {"vagnar": [], "tid": 0}
+        self.tittare = 0.0
+        self.status = {"tidtabell": "startar", "realtid": "väntar"}
+
+
+# Ett område utan layout (inte byggd än) visas inte.
+OMR = {k: Omrade(k, c) for k, c in OMRADEN.items() if (ROT / c["layout"] / "layout.json").exists()}
+LISTA = [[k, o.conf["namn"]] for k, o in OMR.items()]
 
 
 def logg(*a):
@@ -70,9 +85,9 @@ def dolj(text):
     return text
 
 
-def satt_status(**kw):
+def satt_status(omr, **kw):
     with lager:
-        tillstand["status"].update({k: dolj(v) if isinstance(v, str) else v for k, v in kw.items()})
+        omr.status.update({k: dolj(v) if isinstance(v, str) else v for k, v in kw.items()})
 
 
 # ---------- Tidtabellen ----------
@@ -84,7 +99,8 @@ def hamta_gtfs():
     if ZIP.exists() and time.time() - ZIP.stat().st_mtime < 20 * 3600:
         return
     logg("hämtar tidtabellen från Trafiklab")
-    satt_status(tidtabell="hämtar från Trafiklab")
+    for omr in OMR.values():
+        satt_status(omr, tidtabell="hämtar från Trafiklab")
     req = urllib.request.Request(f"https://opendata.samtrafiken.se/gtfs/vt/vt.zip?key={TL_NYCKEL}",
                                  headers={"Accept-Encoding": "gzip"})
     tmp = ZIP.with_suffix(".tmp")
@@ -96,50 +112,51 @@ def hamta_gtfs():
     logg("tidtabellen hämtad,", ZIP.stat().st_size // 1_000_000, "MB")
 
 
-def bygg(dag, layout):
-    cache = DATA / f"dag-{dag.isoformat()}.json.gz"
+def bygg(omr, dag):
+    cache = DATA / f"dag-{omr.nyckel}-{dag.isoformat()}.json.gz"
     if cache.exists() and cache.stat().st_mtime >= ZIP.stat().st_mtime:
         with gzip.open(cache, "rt", encoding="utf-8") as f:
             d = json.load(f)
         d["former"] = {k: [tuple(p) for p in v] for k, v in d["former"].items()}
         d["stationer"] = {k: tuple(v) for k, v in d["stationer"].items()}
         return d
-    logg("bygger tidtabellen för", dag)
-    satt_status(tidtabell=f"bygger {dag}")
+    logg(f"bygger tidtabellen för {omr.conf['namn']} {dag}")
+    satt_status(omr, tidtabell=f"bygger {dag}")
     t0 = time.time()
-    d = tidtabell.bygg_dag(ZIP, dag)
+    d = tidtabell.bygg_dag(ZIP, dag, omr.conf["typer"], omr.conf["ruta"])
     with gzip.open(cache, "wt", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
+    # dag-<område>-ÅÅÅÅ-MM-DD.json.gz; äldre än i förrgår tas bort.
     for gammal in DATA.glob("dag-*.json.gz"):
-        if gammal.name < f"dag-{(dag - timedelta(days=2)).isoformat()}":
+        if gammal.name[-18:-8] < (dag - timedelta(days=2)).isoformat():
             gammal.unlink()
-    logg(f"tidtabellen för {dag}: {len(d['turer'])} turer på {time.time() - t0:.0f} s")
+    logg(f"tidtabellen för {omr.conf['namn']} {dag}: {len(d['turer'])} turer på {time.time() - t0:.0f} s")
     return d
 
 
 def tidtabell_loop():
-    layout = LAYOUT
     while True:
-        try:
-            DATA.mkdir(parents=True, exist_ok=True)
-            hamta_gtfs()
-            if not ZIP.exists():
-                satt_status(tidtabell="ingen tidtabell: TRAFIKLAB_KEY saknas i .env")
-            else:
+        for omr in OMR.values():
+            try:
+                DATA.mkdir(parents=True, exist_ok=True)
+                hamta_gtfs()
+                if not ZIP.exists():
+                    satt_status(omr, tidtabell="ingen tidtabell: TRAFIKLAB_KEY saknas i .env")
+                    continue
                 idag = tidtabell.stockholm_nu().date()
                 with lager:
-                    aktuell = tillstand["dag"] and tillstand["dag"]["dag"]
+                    aktuell = omr.dag and omr.dag["dag"]
                 if aktuell != idag.isoformat():
-                    d = bygg(idag, layout)
-                    k = dict(tidtabell.klientdata(d, layout), layout=LAYOUT_VERSION)
+                    d = bygg(omr, idag)
+                    k = dict(tidtabell.klientdata(d, omr.layout), layout=omr.version, omrade=omr.nyckel, omraden=LISTA)
                     klient = gzip.compress(json.dumps(k, ensure_ascii=False, separators=(",", ":")).encode())
                     with lager:
-                        tillstand.update(dag=d, klient=klient, matchning=realtid.Matchning(d))
-                    satt_status(tidtabell=f"{idag}, version {d['version']}, {len(d['turer'])} turer")
-        except Exception as e:
-            logg("tidtabellen:", repr(e))
-            traceback.print_exc()
-            satt_status(tidtabell=f"fel: {e}")
+                        omr.dag, omr.klient, omr.matchning = d, klient, realtid.Matchning(d)
+                    satt_status(omr, tidtabell=f"{idag}, version {d['version']}, {len(d['turer'])} turer")
+            except Exception as e:
+                logg(f"tidtabellen för {omr.conf['namn']}:", repr(e))
+                traceback.print_exc()
+                satt_status(omr, tidtabell=f"fel: {e}")
         time.sleep(60)
 
 
@@ -147,35 +164,39 @@ def tidtabell_loop():
 
 def realtid_loop():
     if not (VT_NYCKEL and VT_HEMLIGHET):
-        satt_status(realtid=FEL_NYCKEL)
+        for omr in OMR.values():
+            satt_status(omr, realtid=FEL_NYCKEL)
         return
     vt = realtid.Vasttrafik(VT_NYCKEL, VT_HEMLIGHET)
-    paus = INTERVALL
+    paus = {k: INTERVALL for k in OMR}
+    nasta = {k: 0.0 for k in OMR}
     while True:
-        start = time.time()
-        with lager:
-            tittar = time.time() - tillstand["tittare"] < TITTAR_S
-            matchning = tillstand["matchning"]
-        if not tittar or not matchning:
-            satt_status(realtid="vilar, ingen tittar" if matchning else "väntar på tidtabellen")
-            time.sleep(1)
-            continue
-        try:
-            vagnar = vt.positioner()
-            nu_dt = tidtabell.stockholm_nu()
-            nu = nu_dt.hour * 3600 + nu_dt.minute * 60 + nu_dt.second + nu_dt.microsecond / 1e6
-            ut = matchning.matcha(vagnar, nu)
+        for omr in OMR.values():
             with lager:
-                tillstand["live"] = {"vagnar": ut, "tid": time.time(), "nu": round(nu, 1),
-                                     "dag": matchning.dag["dag"]}
-            satt_status(realtid=f"{len(ut)} vagnar, {sum(1 for v in ut if v['tur'] >= 0)} kopplade",
-                        realtid_fel=None)
-            paus = INTERVALL
-        except Exception as e:
-            logg("realtiden:", repr(e))
-            satt_status(realtid_fel=str(e))
-            paus = min(60, paus * 2)
-        time.sleep(max(0.5, paus - (time.time() - start)))
+                tittar = time.time() - omr.tittare < TITTAR_S
+                matchning = omr.matchning
+            if not tittar or not matchning:
+                satt_status(omr, realtid="vilar, ingen tittar" if matchning else "väntar på tidtabellen")
+                continue
+            if time.time() < nasta[omr.nyckel]:
+                continue
+            start = time.time()
+            try:
+                vagnar = vt.positioner(omr.conf["positioner"], omr.conf["lagen"])
+                nu_dt = tidtabell.stockholm_nu()
+                nu = nu_dt.hour * 3600 + nu_dt.minute * 60 + nu_dt.second + nu_dt.microsecond / 1e6
+                ut = matchning.matcha(vagnar, nu)
+                with lager:
+                    omr.live = {"vagnar": ut, "tid": time.time(), "nu": round(nu, 1), "dag": matchning.dag["dag"]}
+                satt_status(omr, realtid=f"{len(ut)} vagnar, {sum(1 for v in ut if v['tur'] >= 0)} kopplade",
+                            realtid_fel=None)
+                paus[omr.nyckel] = INTERVALL
+            except Exception as e:
+                logg(f"realtiden för {omr.conf['namn']}:", repr(e))
+                satt_status(omr, realtid_fel=str(e))
+                paus[omr.nyckel] = min(60, paus[omr.nyckel] * 2)
+            nasta[omr.nyckel] = start + paus[omr.nyckel]
+        time.sleep(0.5)
 
 
 # ---------- Webben ----------
@@ -202,29 +223,32 @@ class Handler(BaseHTTPRequestHandler):
         self.skicka(kod, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
     def do_GET(self):
-        vag = self.path.split("?")[0]
+        vag, _, fraga = self.path.partition("?")
+        omr = OMR.get(urllib.parse.parse_qs(fraga).get("omrade", [STANDARD])[0])
         if vag in ("/", "/index.html"):
             self.skicka(200, (ROT / "web" / "index.html").read_bytes(), "text/html; charset=utf-8")
+        elif vag == "/api/status":
+            with lager:
+                self.json(200, {k: dict(o.status, tittare_for_s=round(time.time() - o.tittare)) for k, o in OMR.items()})
+        elif omr is None:
+            self.json(404, {"fel": "området finns inte"})
         elif vag == "/karta.svg":
-            self.skicka(200, KARTA, "image/svg+xml")
+            self.skicka(200, omr.karta, "image/svg+xml")
         elif vag == "/api/dag":
             with lager:
-                klient = tillstand["klient"]
+                klient = omr.klient
             if klient:
                 self.skicka(200, klient, "application/json; charset=utf-8", gz=True)
             else:
-                self.json(503, {"fel": tillstand["status"]["tidtabell"]})
+                self.json(503, {"fel": omr.status["tidtabell"]})
         elif vag == "/api/live":
             with lager:
-                tillstand["tittare"] = time.time()
-                live, status = dict(tillstand["live"]), dict(tillstand["status"])
+                omr.tittare = time.time()
+                live, status = dict(omr.live), dict(omr.status)
             live["fel"] = status.get("realtid_fel") or (None if VT_NYCKEL and VT_HEMLIGHET else FEL_NYCKEL)
             live["alder"] = round(time.time() - live["tid"], 1) if live["tid"] else None
-            live["layout"] = LAYOUT_VERSION
+            live["layout"] = omr.version
             self.json(200, live)
-        elif vag == "/api/status":
-            with lager:
-                self.json(200, dict(tillstand["status"], tittare_for_s=round(time.time() - tillstand["tittare"])))
         else:
             self.json(404, {"fel": "finns inte"})
 
@@ -232,5 +256,5 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     threading.Thread(target=tidtabell_loop, daemon=True).start()
     threading.Thread(target=realtid_loop, daemon=True).start()
-    logg(f"spårvagnskartan på port {PORT}")
+    logg(f"kartan på port {PORT}, områden: {', '.join(o.conf['namn'] for o in OMR.values())}")
     ThreadingHTTPServer(("", PORT), Handler).serve_forever()

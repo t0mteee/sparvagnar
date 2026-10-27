@@ -2,6 +2,7 @@
 
 Göteborgs alla spårvagnar i rörelse på en schematisk linjekarta: raka linjer,
 45°-vinklar, prickar som glider mellan hållplatserna i takt med verkligheten.
+En flik visar bussarna och tågen i Kungsbacka kommun på samma sätt.
 Körs i Docker på en hemmaserver och nås på http://localhost:8125.
 
 ## Faser
@@ -19,6 +20,9 @@ Körs i Docker på en hemmaserver och nås på http://localhost:8125.
   hållplats, uppdrag (hitta en viss vagn), Visste du?-fakta ur dagens
   tidtabell och en spårvagnsklocka. Kvar: störningar, helskärm för TV:n.
   Vagnmodellen finns inte i Västtrafiks öppna data, så formen är generisk.
+- **Fas 5, fler områden:** Kungsbacka kommun med bussar och tåg, på en egen
+  linjekarta bakom en flik. Bussar ritas som bussar och tåg som tåg. Områdena
+  står i `server/omraden.py`.
 
 Västtrafiks officiella spårvagnskarta har ingen öppen licens och används
 därför inte; sidan länkar till den. `verktyg/bygg_forhandsvisning.py` gör en
@@ -35,7 +39,8 @@ docker compose up -d
 ```
 
 Sidan finns sedan på http://localhost:8125, och från andra enheter på
-hemmanätet på samma port med serverns namn. Första starten hämtar
+hemmanätet på samma port med serverns namn. Fliken uppe till vänster byter
+område; `?omrade=kungsbacka` i adressen går direkt dit. Första starten hämtar
 tidtabellen och bygger dagens turer, vilket tar en eller ett par minuter;
 sidan väntar och säger till under tiden. Läget syns på `/api/status`.
 
@@ -70,8 +75,11 @@ Servern (`server/`) är Python med bara standardbiblioteket:
 - `realtid.py` hämtar positionerna och kopplar varje vagn till sin tur: samma
   linje och skylt, och den tur där positionen ligger längs spåret närmast i
   tid. Skillnaden blir vagnens försening.
-- `server.py` serverar sidan (`web/index.html`), kartan (`layout/karta.svg`)
-  och tre API-anrop: `/api/dag`, `/api/live` och `/api/status`.
+- `server.py` serverar sidan (`web/index.html`), områdets karta och tre
+  API-anrop: `/api/dag`, `/api/live` och `/api/status`. Kartan och de två
+  första tar `?omrade=` (`goteborg` är standard).
+- `omraden.py` anger områdena: vilka slags fordon, rutan de avgränsas av och
+  var kartan ligger.
 
 Sidan visar varje vagn som sin tur, förskjuten med förseningen. Ändras
 förseningen glider vagnen ikapp eller stannar en stund, men backar aldrig.
@@ -81,11 +89,12 @@ hållplats.
 ## Linjekartan
 
 Layouten är vår egen; Västtrafiks linjenätskarta är deras och ritas inte av.
-Den genereras en gång ur tidtabellen med det öppna verktyget
+Den genereras en gång per område ur tidtabellen med det öppna verktyget
 [LOOM](https://github.com/ad-freiburg/loom), som gör om ett linjenät till en
-schematisk karta:
+schematisk karta. Spårvagnarna i Göteborg:
 
 ```
+python3 verktyg/plocka_gtfs.py data/vt.zip data/tram goteborg
 python3 verktyg/vanliga_turer.py data/tram data/tram_vanlig
 gtfs2graph -m tram data/tram_vanlig > graph.json
 topo -d 110 < graph.json > topo.json
@@ -94,10 +103,31 @@ python3 verktyg/jamna_avstand.py layout/octi.json > layout/octi_jamn.json
 python3 verktyg/bygg_layout.py layout/octi_jamn.json data/tram colors.json "$(command -v transitmap)" layout/
 ```
 
+Bussarna och tågen i Kungsbacka. Västtrafik ger alla bussar där samma gula
+färg, så `farga_linjer.py` väljer egna färger, och fisheye-centrum är
+Kungsbacka station:
+
+```
+python3 verktyg/plocka_gtfs.py data/vt.zip data/kungsbacka kungsbacka
+python3 verktyg/vanliga_turer.py data/kungsbacka data/kungsbacka_vanlig
+python3 verktyg/farga_linjer.py data/kungsbacka_vanlig > layout/kungsbacka/farger.json
+gtfs2graph data/kungsbacka_vanlig > graph.json
+topo -d 110 < graph.json > topo.json
+python3 verktyg/forstora_centrum.py topo.json 0.6 57.4905 12.0797 | loom | octi > layout/kungsbacka/octi.json
+python3 verktyg/jamna_avstand.py layout/kungsbacka/octi.json > layout/kungsbacka/octi_jamn.json
+python3 verktyg/bygg_layout.py layout/kungsbacka/octi_jamn.json data/kungsbacka layout/kungsbacka/farger.json \
+    "$(command -v transitmap)" layout/kungsbacka/ --knutar "Kungsbacka station"
+```
+
+`plocka_gtfs.py` plockar ut områdets linjer ur hela Västtrafiks tidtabell.
+Har området en ruta tas bara den del av turerna som ligger inom den, så att
+tåg och expressbussar slutar vid gränsen.
+
 `vanliga_turer.py` tar bara med det vanliga linjenätet de närmaste åtta
 veckorna: sträckor som minst 4 % av linjens turer kör, minst varannan dag.
-Omledningar, turer till vagnhallen, extralinjen X och säsongslinjen 13 ritas
-inte, annars blir knippena breda av linjer som nästan aldrig går där. Vagnar på
+Omledningar, turer till vagnhallen, ersättningsbussar, extralinjen X och
+säsongslinjen 13 ritas inte, annars blir knippena breda av linjer som nästan
+aldrig går där. Vagnar på
 sådana turer lånar en annan linjes väg mellan samma hållplatser.
 
 `topo -d 110` slår ihop spår som ligger inom 110 meter från varandra, så att
@@ -108,15 +138,17 @@ innan kartan görs schematisk, som på en klassisk linjekarta.
 
 `bygg_layout.py` ritar linjerna med transitmap och lägger sedan till det som
 gör den till en linjekarta: en vit prick på varje linje som stannar, ihopbunden
-tvärs över knippet; en vit cirkel vid de stora bytespunkterna; och alla
+tvärs över knippet; en vit cirkel vid de stora bytespunkterna, eller en kapsel
+när bytespunkten ligger i flera noder (som Kungsbacka station); och alla
 hållplatsnamn, utplacerade så att de inte krockar med linjer eller varandra.
 Varje linjebit och hållplats i kartan märks dessutom med sträckorna och namnet
 den hör till, så att sidan kan tona ner det som ingen vagn kör idag, till
 exempel ett avstängt spår.
 
-Resultatet ligger i `layout/`: LOOM:s graf (`octi.json` och den utjämnade
-`octi_jamn.json`), kartan (`karta.svg`) och vagnarnas vägar längs varje linje
-mellan hållplatserna (`layout.json`). Servern läser bara det, så varken LOOM
+Resultatet ligger i `layout/` för Göteborg och `layout/kungsbacka/`:
+LOOM:s graf (`octi.json` och den utjämnade `octi_jamn.json`), kartan
+(`karta.svg`) och vagnarnas vägar längs varje linje mellan hållplatserna
+(`layout.json`). Servern läser bara det, så varken LOOM
 eller transitmap behövs på servern. Görs om när linjenätet ändras.
 Tidtabellsdatan från Trafiklab är CC0.
 

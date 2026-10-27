@@ -9,6 +9,9 @@ en Claude-session som kör i den här mappen på servern.
 - Fas 0–3 körs på servern. Fas 4 (kul och informativ för barn) är byggd:
   dag/natt, Åk med, avgångstavla, uppdrag, Visste du?, spårvagnsklocka.
   Efter git pull: docker compose restart sparvagnar (layouten läses vid start).
+- Två områden, flik på sidan: Göteborg (spårvagnar) och Kungsbacka kommun
+  (bussar och tåg), se `server/omraden.py`. Varje område har egen layout i
+  `layout/` respektive `layout/kungsbacka/`.
 - Sidan är till för ett barn: tydlig, rolig, inga tekniska ord i gränssnittet.
 - Västtrafiks officiella spårvagnskarta har ingen öppen licens; använd den inte,
   länka till den.
@@ -42,6 +45,7 @@ en Claude-session som kör i den här mappen på servern.
   använd den men skriv den aldrig till en fil i repot.
 - Repot är publikt. Inget om hemmet eller familjen här. Domänen och adressen
   till sidan står bara i Cloudflare, inte i repot.
+  Områden beskrivs på kommunnivå; peka inte ut enskilda orter eller hållplatser.
 - Kontona hos Västtrafik och Trafiklab skapar användaren själv.
 - Layouten är vår egen. Rita inte av Västtrafiks linjenätskarta.
 - Servern skrivs i Python med bara standardbiblioteket, som familjesidan i
