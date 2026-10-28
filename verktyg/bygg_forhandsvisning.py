@@ -33,6 +33,8 @@ assert "</script" not in text
 head = re.search(r"<head>(.*?)</head>", sida, re.S).group(1)
 body = re.search(r"<body>(.*?)</body>", sida, re.S).group(1)
 head = re.sub(r'<meta (charset|name="viewport")[^>]*>\s*', "", head)
+# Manifest och ikoner finns bara på servern.
+head = re.sub(r'<link rel="(manifest|apple-touch-icon)"[^>]*>\s*', "", head)
 titel = re.search(r"<title>.*?</title>", head).group(0)
 head = head.replace(titel, "")
 

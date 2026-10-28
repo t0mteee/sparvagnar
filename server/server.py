@@ -4,6 +4,7 @@ Körs i Docker på servern (se docker-compose.yml). Håller nycklarna på
 serversidan. Bara standardbiblioteket, ingen pip.
 
   GET /                     sidan (web/index.html, läses per anrop)
+  GET /manifest.webmanifest och /ikon-*.png   för att lägga sidan på hemskärmen
   GET /karta.svg?omrade=    områdets karta
   GET /api/dag?omrade=      dagens turer, vägar och linjer
   GET /api/live?omrade=     senaste positionerna, kopplade till turerna
@@ -43,6 +44,10 @@ INTERVALL = 5
 FEL_NYCKEL = "VASTTRAFIK_KEY och VASTTRAFIK_SECRET saknas i .env."
 TITTAR_S = 60          # så länge efter senaste anropet räknas sidan som öppen
 STANDARD = "goteborg"
+# Filer i web/ som serveras som de är. Bara de här, så att inget annat i
+# mappen kan hämtas.
+STATISKA = {"/manifest.webmanifest": "application/manifest+json", "/ikon-180.png": "image/png",
+            "/ikon-192.png": "image/png", "/ikon-512.png": "image/png"}
 
 lager = threading.Lock()
 
@@ -227,6 +232,8 @@ class Handler(BaseHTTPRequestHandler):
         omr = OMR.get(urllib.parse.parse_qs(fraga).get("omrade", [STANDARD])[0])
         if vag in ("/", "/index.html"):
             self.skicka(200, (ROT / "web" / "index.html").read_bytes(), "text/html; charset=utf-8")
+        elif vag in STATISKA:
+            self.skicka(200, (ROT / "web" / vag[1:]).read_bytes(), STATISKA[vag], cache="max-age=86400")
         elif vag == "/api/status":
             with lager:
                 self.json(200, {k: dict(o.status, tittare_for_s=round(time.time() - o.tittare)) for k, o in OMR.items()})

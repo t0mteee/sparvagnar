@@ -40,7 +40,14 @@ docker compose up -d
 
 Sidan finns sedan på http://localhost:8125, och från andra enheter på
 hemmanätet på samma port med serverns namn. Fliken uppe till vänster byter
-område; `?omrade=kungsbacka` i adressen går direkt dit. Första starten hämtar
+område; `?omrade=kungsbacka` i adressen går direkt dit.
+
+På iPhone går sidan att lägga på hemskärmen (Dela, Lägg till på hemskärmen).
+Den öppnas då i helskärm som en egen app, med ikon och namnet Trafiken
+(`web/manifest.webmanifest`, ikonerna ritas av `verktyg/rita_ikon.py`). Sidan
+sitter fast i fönstret och går inte att zooma utanför kartan, så att menyn
+längst ner inte kan hamna utanför skärmen. Har appen legat i bakgrunden mer
+än en halvtimme laddas den om när den öppnas. Första starten hämtar
 tidtabellen och bygger dagens turer, vilket tar en eller ett par minuter;
 sidan väntar och säger till under tiden. Läget syns på `/api/status`.
 

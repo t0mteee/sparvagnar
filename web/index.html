@@ -2,9 +2,14 @@
 <html lang="sv" data-tema="natt">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Trafiken">
+<meta name="theme-color" content="#0b1016">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="ikon-180.png">
 <title>Trafiken</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,7 +18,7 @@
 /* Kartan fyller skärmen; instrumenten flyter ovanpå i hörnen.
    Natt: kontrollrum. Dag: ljust, som en tryckt linjekarta. */
 :root {
-  --bg: #0b1016; --panel: rgba(16, 23, 31, 0.9); --rule: #223040; --knapp: #182230;
+  --bg: #0b1016; --panel: rgba(16, 23, 31, 0.95); --rule: #223040; --knapp: #182230;
   --text: #dce5ee; --muted: #8395a7; --signal: #ffb547; --live: #5fd38d;
   --kant: #0b1016; --prick: #e4ebf2; --prick-kant: #0b1016; --namn: #a7b6c4; --vit-kant: #0b1016; --svart-kant: #7b8a99;
   --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
@@ -21,16 +26,23 @@
   color-scheme: dark;
 }
 :root[data-tema="dag"] {
-  --bg: #f2f5f7; --panel: rgba(255, 255, 255, 0.94); --rule: #d3dbe2; --knapp: #eef2f5;
+  --bg: #f2f5f7; --panel: rgba(255, 255, 255, 0.96); --rule: #d3dbe2; --knapp: #eef2f5;
   --text: #14212c; --muted: #586a7a; --signal: #b85f00; --live: #14874a;
   --kant: #ffffff; --prick: #ffffff; --prick-kant: #14212c; --namn: #23313e; --vit-kant: #8a98a6; --svart-kant: #ffffff;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
+html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 [hidden] { display: none !important; }
-body { background: var(--bg); color: var(--text); font-family: var(--display); overflow: hidden; transition: background 0.4s; }
-.app { position: relative; height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--display); transition: background 0.4s;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+}
+/* Appen sitter fast i fönstret. Då kan Safari varken skrolla undan menyn längst ner
+   eller låta den hamna bakom sina egna knappar. */
+.app { position: fixed; inset: 0; overflow: hidden; }
+/* Knappar och paneler: dubbeltryck zoomar inte sidan (kartan har egen zoom). */
+.panel, .ikoner, button { touch-action: manipulation; }
 #karta { position: absolute; inset: 0; touch-action: none; cursor: grab; }
 #karta.drar { cursor: grabbing; }
 #karta svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -57,7 +69,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--display); o
 .panel {
   position: absolute; z-index: 2;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 8px;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
 button {
   font: inherit; font-size: 16px; font-weight: 600; color: var(--text);
@@ -98,13 +109,13 @@ a { color: var(--signal); }
   position: absolute; z-index: 2; display: grid; gap: 8px;
   top: calc(env(safe-area-inset-top, 0px) + 10px); right: max(10px, env(safe-area-inset-right, 0px));
 }
-.ikon { width: 46px; height: 46px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: var(--panel); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.ikon { width: 46px; height: 46px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: var(--panel); }
 .ikon[aria-pressed="true"] { background: var(--signal); color: #1a1205; }
 .ikon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Dockan längst ner: tid, linjer och fakta. Smal och centrerad på stor skärm. */
 .styr {
-  left: 50%; transform: translateX(-50%);
+  left: 0; right: 0; margin: 0 auto;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   width: min(720px, calc(100% - 20px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
   padding: 8px 10px; display: grid; gap: 7px; min-width: 0;
@@ -288,6 +299,7 @@ a { color: var(--signal); }
       <li>En gul bricka eller ring vid en vagn betyder att den är mer än tre minuter sen. Siffran är minuterna.</li>
       <li>En ihålig ring är en vagn som Västtrafik ser, men som inte gick att koppla till en tur i tidtabellen.</li>
     </ul>
+    <p id="hemskarm-tips"><b>Som en app:</b> i Safari, tryck på Dela och sedan Lägg till på hemskärmen. Då öppnas kartan i helskärm, utan Safaris knappar.</p>
     <h3>Om kartan</h3>
     <p>Kartan är ritad av en dator ur tidtabellen, inte av Västtrafik, så den ser lite annorlunda ut än den officiella. Västtrafiks egna linjekartor finns hos <a href="https://www.vasttrafik.se/reseplanering/mer-om-reseplanering/linjekartor/" target="_blank" rel="noopener">Västtrafik</a>.</p>
     <p>Vagnarnas lägen kommer från Västtrafik var femte sekund. Tidtabellen kommer från Samtrafiken via Trafiklab. Layouten är gjord med LOOM från Freiburgs universitet. Vilken vagnmodell som kör finns inte i den öppna datan, så alla vagnar ritas likadant.</p>
@@ -345,6 +357,7 @@ a { color: var(--signal); }
     document.documentElement.dataset.tema = namn;
     const cs = getComputedStyle(document.documentElement), v = n => cs.getPropertyValue(n).trim();
     T = { namn, bg: v("--bg"), text: v("--text"), signal: v("--signal"), kant: namn === "dag" ? "#14212c" : "#0b1016" };
+    document.querySelector('meta[name="theme-color"]').content = T.bg;
     $("tema").innerHTML = namn === "dag" ? IKON.mane : IKON.sol;
     $("tema").setAttribute("aria-label", namn === "dag" ? "Byt till natt" : "Byt till dag");
   }
@@ -810,6 +823,17 @@ a { color: var(--signal); }
     vy.x += sx / vy.k - sx / k2; vy.y += sy / vy.k - sy / k2; vy.k = k2; tillampa();
   }
   window.addEventListener("resize", storlek);
+  // Safari på iPhone zoomar annars hela sidan när man nyper utanför kartan,
+  // och då kan menyn hamna utanför skärmen. Kartan zoomar själv.
+  for (const typ of ["gesturestart", "gesturechange"]) document.addEventListener(typ, e => e.preventDefault(), { passive: false });
+  // På hemskärmen kan appen ligga i bakgrunden i dagar. Har den varit borta
+  // länge laddas den om, så att tidtabell och karta är dagens.
+  let doldSedan = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") doldSedan = Date.now();
+    else if (doldSedan && Date.now() - doldSedan > 30 * 60 * 1000) location.reload();
+  });
+  $("hemskarm-tips").hidden = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 
   // Den del av skärmen som inte täcks av panelerna.
   function friYta() {

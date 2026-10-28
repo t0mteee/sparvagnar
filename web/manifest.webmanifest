@@ -1,0 +1,16 @@
+{
+  "name": "Trafiken",
+  "short_name": "Trafiken",
+  "description": "Spårvagnar, bussar och tåg i rörelse på en linjekarta.",
+  "lang": "sv",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1016",
+  "theme_color": "#0b1016",
+  "icons": [
+    { "src": "ikon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "ikon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
