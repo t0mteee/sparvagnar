@@ -587,10 +587,11 @@ a { color: var(--signal); }
   }
   const sparaFilter = () => spara(filterNyckel(), JSON.stringify({ typer: [...filt.typer], linjer: [...filt.linjer] }));
   // Linjen syns om varken den eller dess slag är gömd. Okända linjer (en vagn
-  // som inte gick att koppla) syns om inte alla slag är gömda.
+  // på en linje som inte finns i områdets tidtabell) syns bara när inget är
+  // gömt, eftersom man inte vet vad den är för slags fordon.
   function syns(namn) {
     const l = linjer.find(x => x.namn === namn);
-    if (!l) return filt.typer.size < omradetsTyper().length;
+    if (!l) return !filt.typer.size && !filt.linjer.size;
     return !filt.linjer.has(namn) && !filt.typer.has(l.typ || "sparvagn");
   }
   const omradetsTyper = () => TYPER.filter(t => linjer.some(l => (l.typ || "sparvagn") === t));
