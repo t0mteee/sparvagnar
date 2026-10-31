@@ -15,6 +15,9 @@ en Claude-session som kör i den här mappen på servern.
 - iOS-appen ligger i `ios/` (Swift, SwiftUI, XcodeGen) och byggs på en Mac med
   Xcode, inte på servern. Serverns adress står i `ios/Konfig/Lokal.xcconfig`,
   som inte checkas in.
+- Reseplanering på sidan och i appen: `server/resa.py` går vidare till
+  Västtrafiks Planera Resa v4 (`/api/platser`, `/api/resa`), `web/resa.js`
+  och `ios/Trafiken/Resa.swift`. Kräver bara `git pull` och omstart på servern.
 - Sidan är till för ett barn: tydlig, rolig, inga tekniska ord i gränssnittet.
 - Västtrafiks officiella spårvagnskarta har ingen öppen licens; använd den inte,
   länka till den.

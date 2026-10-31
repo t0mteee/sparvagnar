@@ -11,6 +11,7 @@ struct KartVy: View {
         GeometryReader { geo in
             ZStack {
                 StatiskKarta()
+                ResLager()
                 Fordonslager().allowsHitTesting(false)
             }
             .contentShape(Rectangle())

@@ -10,6 +10,7 @@ serversidan. Bara standardbiblioteket, ingen pip.
   GET /api/live?omrade=     senaste positionerna, kopplade till turerna
   GET /api/status           vad servern håller på med, per område
   GET /api/karta?omrade=    kartan som vektordata, för appen (se vektor.py)
+  GET /api/platser, /api/resa, /api/resa/detaljer   reseplanering (se resa.py)
 
 omrade är goteborg (spårvagnarna, standard) eller kungsbacka (bussar och tåg),
 se omraden.py. Tidtabellen hämtas från Trafiklab högst en gång per dygn.
@@ -31,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import realtid  # noqa: E402
+import resa  # noqa: E402
 import tidtabell  # noqa: E402
 from omraden import OMRADEN  # noqa: E402
 from vektor import vektor  # noqa: E402
@@ -49,9 +51,11 @@ STANDARD = "goteborg"
 # Filer i web/ som serveras som de är. Bara de här, så att inget annat i
 # mappen kan hämtas.
 STATISKA = {"/manifest.webmanifest": "application/manifest+json", "/ikon-180.png": "image/png",
-            "/ikon-192.png": "image/png", "/ikon-512.png": "image/png"}
+            "/ikon-192.png": "image/png", "/ikon-512.png": "image/png",
+            "/resa.js": "text/javascript; charset=utf-8"}
 
 lager = threading.Lock()
+RESOR = resa.Resor(VT_NYCKEL, VT_HEMLIGHET)
 
 
 class Omrade:
@@ -241,6 +245,9 @@ class Handler(BaseHTTPRequestHandler):
         elif vag == "/api/status":
             with lager:
                 self.json(200, {k: dict(o.status, tittare_for_s=round(time.time() - o.tittare)) for k, o in OMR.items()})
+        elif vag in resa.VAGAR:
+            kod, svar = RESOR.svara(vag, fraga)
+            self.json(kod, svar)
         elif omr is None:
             self.json(404, {"fel": "området finns inte"})
         elif vag == "/karta.svg":

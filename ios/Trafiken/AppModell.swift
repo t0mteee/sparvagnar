@@ -13,11 +13,14 @@ struct Vy: Equatable {
 enum Valt: Identifiable, Equatable {
     case vagn(String)
     case hallplats(String)
+    /// Reseplaneringen (Resa.swift).
+    case resa
 
     var id: String {
         switch self {
         case .vagn(let i): return "v" + i
         case .hallplats(let n): return "h" + n
+        case .resa: return "resa"
         }
     }
 }
