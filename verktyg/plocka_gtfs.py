@@ -27,7 +27,7 @@ arg.add_argument("zip")
 arg.add_argument("ut")
 arg.add_argument("omrade", choices=sorted(OMRADEN))
 a = arg.parse_args()
-typer, ruta = OMRADEN[a.omrade]["typer"], OMRADEN[a.omrade]["ruta"]
+typer, ruta, bara = OMRADEN[a.omrade]["typer"], OMRADEN[a.omrade]["ruta"], OMRADEN[a.omrade].get("bara")
 z = zipfile.ZipFile(a.zip)
 ut = Path(a.ut)
 ut.mkdir(parents=True, exist_ok=True)
@@ -52,7 +52,8 @@ def skriv(f, rad_lista):
 
 
 routes = {r["route_id"]: dict(r, route_short_name=tidtabell.linjenamn(r))
-          for r in rader("routes.txt") if r["route_type"] in typer}
+          for r in rader("routes.txt") if r["route_type"] in typer
+          and (bara is None or bara(tidtabell.linjenamn(r), tidtabell.fordonstyp(r["route_type"])))}
 stopp = {r["stop_id"]: r for r in rader("stops.txt")}
 
 

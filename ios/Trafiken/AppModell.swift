@@ -69,6 +69,7 @@ final class AppModell {
     var valt: Valt?
     var markerad: String?
     var tystaStreck = Set<Int>()
+    let filter = Filter()
 
     // Min position: hållplatsen närmast mig, och ett meddelande medan den letas fram.
     var minPosition: String?
@@ -150,6 +151,7 @@ final class AppModell {
                 let (dj, kj) = try await (d, k)
                 guard omr == omrade else { return }
                 dag = Dag(dj, omrade: omr)
+                filter.las(omr)
                 karta = Karta(kj)
                 live = [:]
                 liveHamtad = nil
@@ -298,7 +300,7 @@ final class AppModell {
         senastRuta = d
         var lista: [Fordon] = []
         if visarLive {
-            for (ref, var v) in live {
+            for (ref, var v) in live where filter.syns(v.linje, i: dag) {
                 if v.tur >= 0, v.tur < dag.turer.count {
                     // takt är hur fort den visade förseningen ändras: 1 = vagnen står still,
                     // -2 = tre gånger fortare. Den ändras gradvis, så att vagnen bromsar mjukt.
@@ -319,7 +321,7 @@ final class AppModell {
                 }
             }
         } else {
-            for tur in dag.turer where t >= tur.start && t <= tur.slut {
+            for tur in dag.turer where t >= tur.start && t <= tur.slut && filter.syns(dag.linjer[tur.linje]) {
                 if let lg = dag.lage(tur, t) {
                     lista.append(Fordon(id: "t\(tur.index)", linje: tur.linje, xy: lg.xy, sen: 0, tur: tur, lage: lg, los: false))
                 }
@@ -372,6 +374,7 @@ final class AppModell {
         case .sparvagn: return "Spårvagn"
         case .buss: return "Buss"
         case .tag: return l.namn == "Öresund" ? "Öresundståg" : "Tåg"
+        case .bat: return "Båt"
         }
     }
 
@@ -385,6 +388,7 @@ final class AppModell {
         var lista: [Avgang] = []
         for (ti, i) in dag.avgangar[namn] ?? [] {
             let tur = dag.turer[ti]
+            if !filter.syns(dag.linjer[tur.linje]) { continue }
             var f = 0.0, id = "t\(ti)", arLive = false, v: LiveVagn?
             if live_ {
                 if let lv = perTur[ti] { f = lv.fMal; id = lv.ref; arLive = true; v = lv }
@@ -424,7 +428,7 @@ final class AppModell {
         if let b = bast { valt = .vagn(b.id); ovanKortet(p); return }
         if let dag {
             var namn: String?, bd2 = max(22, 9 * vy.k)
-            for s in dag.stationer where !s.namn.contains("Vändslinga") {
+            for s in dag.stationer where !s.namn.contains("Vändslinga") && !filter.gomd(hallplats: s.namn, i: dag) {
                 let q = skarm(s.p), d = hypot(q.x - p.x, q.y - p.y)
                 if d < bd2 { bd2 = d; namn = s.namn }
             }
@@ -445,7 +449,7 @@ final class AppModell {
         guard let karta else { return nil }
         let q = CGPoint(x: vy.x + p.x / vy.k, y: vy.y + p.y / vy.k), marginal = 8 / vy.k
         return karta.namn.first { n in
-            n.storlek * vy.k >= 6 && !n.namn.isEmpty && !n.namn.contains("Vändslinga")
+            n.storlek * vy.k >= 6 && !n.namn.isEmpty && !n.namn.contains("Vändslinga") && !(dag.map { filter.gomd(hallplats: n.namn, i: $0) } ?? false)
                 && n.ruta.insetBy(dx: -marginal, dy: -marginal).contains(q)
         }?.namn
     }

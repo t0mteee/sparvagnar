@@ -9,9 +9,14 @@ en Claude-session som kör i den här mappen på servern.
 - Fas 0–3 körs på servern. Fas 4 (kul och informativ för barn) är byggd:
   dag/natt, Åk med, avgångstavla, uppdrag, Visste du?, spårvagnsklocka.
   Efter git pull: docker compose restart sparvagnar (layouten läses vid start).
-- Två områden, flik på sidan: Göteborg (spårvagnar) och Kungsbacka kommun
-  (bussar och tåg), se `server/omraden.py`. Varje område har egen layout i
-  `layout/` respektive `layout/kungsbacka/`.
+- Tretton områden, i en meny på sidan och i appen: Göteborgs spårvagnar,
+  Göteborgs bussar och båtar, och bussar och tåg i Kungsbacka, Mölndal och
+  Härryda, Partille, Lerum, Kungälv, Alingsås, Borås, Trollhättan och
+  Vänersborg, Uddevalla, Lidköping och Skövde. Se `server/omraden.py` och
+  tabellen i README.md. Spårvagnarnas layout ligger i `layout/`, de andras i
+  `layout/<område>/`. Ett filter väljer slag av fordon och linjer.
+- Varje område bygger sin egen dagliga tidtabell ur samma GTFS-fil, ett i
+  taget, ungefär en halv minut var.
 - iOS-appen ligger i `ios/` (Swift, SwiftUI, XcodeGen) och byggs på en Mac med
   Xcode, inte på servern. Serverns adress står i `ios/Konfig/Lokal.xcconfig`,
   som inte checkas in.
@@ -39,8 +44,9 @@ en Claude-session som kör i den här mappen på servern.
   `.env` (`TUNNEL_TOKEN`). Adressen ställs in i Cloudflare, inte i repot.
 - Logg: `docker compose logs -f sparvagnar`
 - Läge: `curl -s localhost:8125/api/status`
-- LOOM för layouten: `docker build -t loom https://github.com/ad-freiburg/loom.git`,
-  sedan `docker run -i loom <verktyg>`.
+- LOOM för layouten: LOOM:s egen Dockerfile bygger inte längre; bygg med
+  Dockerfilen i README.md (`docker build -t loom .`), sedan
+  `docker run --rm -i loom <verktyg>`. Kedjan per område står i README.md.
 
 ## Regler
 

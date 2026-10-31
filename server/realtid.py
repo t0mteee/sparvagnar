@@ -41,9 +41,15 @@ class Vasttrafik:
         return self.token
 
     def positioner(self, rutor, lagen):
-        """Fordonen i rutorna (syd, väst, nord, öst), av slagen i lagen (tram, bus, train)."""
+        """Fordonen i rutorna (syd, väst, nord, öst), av slagen i lagen (tram, bus, ferry, train).
+
+        Ett anrop ger högst 200 fordon. Kommer det så många delas rutan i fyra
+        och hämtas igen, högst två gånger om, så att inga fordon tappas.
+        """
         vagnar = {}
-        for lat1, lon1, lat2, lon2 in rutor:
+        rutor = [(r, 0) for r in rutor]
+        while rutor:
+            (lat1, lon1, lat2, lon2), djup = rutor.pop()
             q = urllib.parse.urlencode({"lowerLeftLat": lat1, "lowerLeftLong": lon1, "upperRightLat": lat2,
                                         "upperRightLong": lon2, "transportModes": lagen, "limit": 200}, doseq=True)
             req = urllib.request.Request(f"{API}/pr/v4/positions?{q}",
@@ -55,6 +61,10 @@ class Vasttrafik:
                 if e.code == 401:
                     self.token = None
                 raise
+            if len(svar) >= 200 and djup < 2:
+                mlat, mlon = (lat1 + lat2) / 2, (lon1 + lon2) / 2
+                rutor += [((a, b, c, d), djup + 1) for a, c in ((lat1, mlat), (mlat, lat2)) for b, d in ((lon1, mlon), (mlon, lon2))]
+                continue
             for v in svar:
                 vagnar[v["detailsReference"]] = v
         return list(vagnar.values())
@@ -109,6 +119,7 @@ class Matchning:
         for i, t in enumerate(dag["turer"]):
             self.per_linje.setdefault(t["linje"], []).append(i)
         self.tag = [i for i, t in enumerate(dag["turer"]) if dag.get("typer", {}).get(t["linje"]) == "tag"]
+        self.bat = [i for i, t in enumerate(dag["turer"]) if dag.get("typer", {}).get(t["linje"]) == "bat"]
         self.koppling = {}  # detailsReference -> turindex
 
     def _kandidat(self, i, p, nu, skylt, forra):
@@ -154,8 +165,11 @@ class Matchning:
         for v in vagnar:
             p = meter(v["latitude"], v["longitude"])
             skylt, forra = _norm(v.get("direction", "")), self.koppling.get(v["detailsReference"])
-            tag = v["line"].get("transportMode") == "train"
-            for i in self.tag if tag else self.per_linje.get(v["line"]["name"], []):
+            lage_ = v["line"].get("transportMode")
+            # Färjor utan linjenummer (som Hönöfärjan) jämförs med alla båtturer.
+            kandidater = (self.tag if lage_ == "train" else self.per_linje.get(v["line"]["name"])
+                          or (self.bat if lage_ == "ferry" else []))
+            for i in kandidater:
                 k = self._kandidat(i, p, nu, skylt, forra)
                 if k:
                     forslag.append((k[0], v["detailsReference"], i, k[1]))

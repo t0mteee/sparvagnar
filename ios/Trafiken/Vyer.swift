@@ -64,16 +64,9 @@ private struct ToppPanel: View {
     @Environment(AppModell.self) private var app
 
     var body: some View {
-        @Bindable var app = app
         let tema = app.tema
         VStack(alignment: .leading, spacing: 6) {
-            if app.omraden.count > 1 {
-                Picker("Område", selection: $app.omrade) {
-                    ForEach(app.omraden, id: \.self) { o in Text(o.namn).tag(o.nyckel) }
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 240)
-            }
+            if app.omraden.count > 1 { OmradesMeny() }
             TimelineView(.periodic(from: .now, by: 0.25)) { tl in
                 let t = app.nu(tl.date), ord = app.dag?.ord ?? (ental: "spårvagn", flera: "spårvagnar")
                 VStack(alignment: .leading, spacing: 2) {
@@ -123,6 +116,7 @@ private struct Knappar: View {
         VStack(spacing: 8) {
             knapp("house", "Tillbaka till mitten") { app.hem() }
             knapp("location.fill", "Min position") { app.hittaMig() }
+            FilterKnapp()
             knapp(app.natt ? "sun.max" : "moon", app.natt ? "Byt till dag" : "Byt till natt") { app.natt.toggle() }
         }
     }
@@ -165,7 +159,7 @@ private struct Docka: View {
             if let dag = app.dag {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 5) {
-                        ForEach(dag.linjer, id: \.namn) { l in
+                        ForEach(dag.linjer.filter(app.filter.syns), id: \.namn) { l in
                             Button { app.valjLinje(l.namn) } label: { Bricka(linje: l, storlek: 18) }
                                 .opacity(app.markerad == nil || app.markerad == l.namn ? 1 : 0.35)
                                 .overlay {
