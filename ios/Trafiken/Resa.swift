@@ -536,7 +536,7 @@ private struct ForslagRad: View {
                 if f.installd {
                     Text("Inställd").bold().foregroundStyle(.red)
                 } else {
-                    Text(f.byten == 0 ? "Inga byten" : f.byten == 1 ? "1 byte" : "\(f.byten) byten")
+                    Text(f.farder.isEmpty ? "Gå hela vägen" : f.byten == 0 ? "Inga byten" : f.byten == 1 ? "1 byte" : "\(f.byten) byten")
                         .foregroundStyle(tema.muted)
                     if let start = f.farder.first?.fran.punkt {
                         Text("· från \(start.namn.components(separatedBy: ", ").first ?? start.namn)\(start.lage.map { ", läge \($0)" } ?? "")")

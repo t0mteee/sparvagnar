@@ -117,7 +117,7 @@
     return `<li class="r-forslag${f.installd ? " installd" : ""}" data-i="${i}">
       <div class="r-tider">${tid(f.avgang, f.avgangPlan)} → ${tid(f.ankomst, f.ankomstPlan)}<span>${restid(f.minuter)}</span></div>
       <div class="r-delar">${delar}</div>
-      <div class="r-om">${f.installd ? `<b class="r-rod">Inställd</b>` : `${f.byten ? f.byten === 1 ? "1 byte" : `${f.byten} byten` : "Inga byten"}${start ? ` · från ${esc(kort(start.fran.namn))}${start.fran.lage ? `, läge ${esc(start.fran.lage)}` : ""}` : ""}`}
+      <div class="r-om">${f.installd ? `<b class="r-rod">Inställd</b>` : `${!start ? "Gå hela vägen" : f.byten ? f.byten === 1 ? "1 byte" : `${f.byten} byten` : "Inga byten"}${start ? ` · från ${esc(kort(start.fran.namn))}${start.fran.lage ? `, läge ${esc(start.fran.lage)}` : ""}` : ""}`}
         ${!f.installd && om >= 0 && om < 60 ? `<b class="${om < 3 ? "sen" : "itid"}">${om ? `om ${om} min` : "Gå nu!"}</b>` : ""}</div>
     </li>`;
   }
