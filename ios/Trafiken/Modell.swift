@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import SwiftUI
+import UIKit
 
 // MARK: - Serverns JSON
 
@@ -296,7 +297,8 @@ final class Karta {
     struct Prick { let p: CGPoint; let r: Double; let linje: String; let namn: String }
     struct Band { let a: CGPoint; let b: CGPoint; let bredd: Double; let kant: Bool; let namn: String }
     struct Knut { let p: CGPoint; let r: Double; let namn: String }
-    struct Namn { let rader: [String]; let p: CGPoint; let storlek: Double; let ankare: String; let knut: Bool; let namn: String }
+    /// ruta är ytan namnet tar på kartan, för att kunna trycka på det.
+    struct Namn { let rader: [String]; let p: CGPoint; let storlek: Double; let ankare: String; let knut: Bool; let namn: String; let ruta: CGRect }
 
     let storlek: CGSize
     let version: String?
@@ -325,7 +327,25 @@ final class Karta {
         band = j.band.map { Band(a: CGPoint(x: $0.x1, y: $0.y1), b: CGPoint(x: $0.x2, y: $0.y2), bredd: $0.bredd, kant: $0.kant, namn: $0.namn) }
         knutar = j.knutar.map { Knut(p: CGPoint(x: $0.x, y: $0.y), r: $0.r, namn: $0.namn) }
         kapslar = j.kapslar.map { Band(a: CGPoint(x: $0.x1, y: $0.y1), b: CGPoint(x: $0.x2, y: $0.y2), bredd: $0.bredd, kant: $0.kant, namn: $0.namn) }
-        namn = j.namn.map { Namn(rader: $0.rader, p: CGPoint(x: $0.x, y: $0.y), storlek: $0.storlek, ankare: $0.ankare, knut: $0.knut, namn: $0.namn) }
+        namn = j.namn.map { n in
+            let p = CGPoint(x: n.x, y: n.y)
+            return Namn(rader: n.rader, p: p, storlek: n.storlek, ankare: n.ankare, knut: n.knut, namn: n.namn,
+                        ruta: Karta.ruta(n.rader, p, storlek: n.storlek, ankare: n.ankare, knut: n.knut))
+        }
+    }
+
+    /// Ytan ett namn tar på kartan i kartenheter, mätt med samma typsnitt som
+    /// KartVy ritar det med: raderna storlek * 1.12 isär, ankaret 78 % ned.
+    static func ruta(_ rader: [String], _ p: CGPoint, storlek: Double, ankare: String, knut: Bool) -> CGRect {
+        let font = UIFont.systemFont(ofSize: storlek, weight: knut ? .bold : .semibold, width: .condensed)
+        let ax: Double = ankare == "end" ? 1 : ankare == "middle" ? 0.5 : 0
+        var ruta = CGRect.null
+        for (r, rad) in rader.enumerated() {
+            let s = (rad as NSString).size(withAttributes: [.font: font])
+            let y = p.y + Double(r) * storlek * 1.12
+            ruta = ruta.union(CGRect(x: p.x - ax * s.width, y: y - 0.78 * s.height, width: s.width, height: s.height))
+        }
+        return ruta
     }
 
     /// Den stora bytespunkten, där kartan börjar.

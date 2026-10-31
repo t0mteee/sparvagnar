@@ -184,8 +184,18 @@ private struct Fordonslager: View {
                     }
                 }
 
-                // Du är här: en pulserande ring vid hållplatsen närmast dig.
+                // Den valda hållplatsen får en ring, så att man ser vilken tavlan gäller.
                 c.opacity = 1
+                if case .hallplats(let namn) = valt {
+                    let rr = max(11, 7 * vy.k)
+                    for st in dag.stationer where st.namn == namn {
+                        let s = skarm(st.p)
+                        c.stroke(Path(ellipseIn: CGRect(x: s.x - rr, y: s.y - rr, width: 2 * rr, height: 2 * rr)),
+                                 with: .color(tema.signal), lineWidth: 3)
+                    }
+                }
+
+                // Du är här: en pulserande ring vid hållplatsen närmast dig.
                 if let namn = minPosition, let st = dag.stationer.first(where: { $0.namn == namn }) {
                     let s = skarm(st.p), puls = 0.5 + 0.5 * sin(tl.date.timeIntervalSinceReferenceDate * 3)
                     let bla = Color(red: 0.16, green: 0.52, blue: 1)

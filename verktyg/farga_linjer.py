@@ -17,7 +17,7 @@ from pathlib import Path
 
 PALETT = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#f032e6", "#42d4f4", "#9a6324",
           "#469990", "#ffe119", "#800000", "#bfef45", "#808000", "#e6a100"]
-TAG = {"Tåg": "#1f3a93", "Öresund": "#6b6f78"}
+TAG = {"Tåg": "#1f3a93", "Öresund": "#c2185b"}
 
 gtfs = Path(sys.argv[1])
 

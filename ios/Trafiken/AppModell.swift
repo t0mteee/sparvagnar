@@ -49,6 +49,7 @@ struct LiveVagn {
 
 struct Avgang: Identifiable {
     let id: String
+    let tur: Int
     let linje: Linje
     let mot: String
     let tid: Double
@@ -333,6 +334,8 @@ final class AppModell {
         let tur: Tur?
         let f: Double
         let mot: String
+        /// Tåg som går längre än tidtabellen räcker: dit det egentligen ska.
+        let vidare: String?
         let live: Bool
         let nara: String?
     }
@@ -341,16 +344,40 @@ final class AppModell {
         guard let dag else { return nil }
         if id.hasPrefix("t"), let i = Int(id.dropFirst()), i < dag.turer.count {
             let tur = dag.turer[i]
-            return VagnInfo(linje: dag.linjer[tur.linje], tur: tur, f: 0, mot: dag.namn[tur.mot], live: false, nara: nil)
+            return VagnInfo(linje: dag.linjer[tur.linje], tur: tur, f: 0, mot: dag.namn[tur.mot], vidare: nil, live: false, nara: nil)
         }
         guard let v = live[id] else { return nil }
         let tur = v.tur >= 0 && v.tur < dag.turer.count ? dag.turer[v.tur] : nil
-        return VagnInfo(linje: tur.map { dag.linjer[$0.linje] } ?? dag.linje(v.linje), tur: tur, f: v.fMal,
-                        mot: v.mot ?? tur.map { dag.namn[$0.mot] } ?? "", live: true, nara: v.nara)
+        let mot = mot(tur, live: v), sista = tur.map { dag.namn[$0.mot] } ?? mot
+        return VagnInfo(linje: tur.map { dag.linjer[$0.linje] } ?? dag.linje(v.linje), tur: tur, f: v.fMal, mot: mot,
+                        vidare: sista.hasPrefix(mot) || mot.hasPrefix(sista) ? nil : mot, live: true, nara: v.nara)
     }
 
-    /// Nästa avgångar från en hållplats, med förseningar när realtiden är igång.
-    func avgangar(_ namn: String, t: Double) -> [Avgang] {
+    /// Vart en tur går. Tågen går ofta längre än Västtrafiks tidtabell räcker,
+    /// som Öresundståget till Malmö, så för dem gäller skylten från realtiden.
+    func mot(_ tur: Tur?, live v: LiveVagn?) -> String {
+        let skylt = v?.mot.map(Self.rensa) ?? ""
+        guard let dag, let tur else { return skylt }
+        return dag.linjer[tur.linje].typ == .tag && !skylt.isEmpty ? skylt : dag.namn[tur.mot]
+    }
+
+    /// Bussarnas skylt i realtiden har ofta ", Påstigning fram" efter målet.
+    static func rensa(_ skylt: String) -> String {
+        skylt.components(separatedBy: ", ").filter { !$0.hasPrefix("Påstigning") }.joined(separator: ", ")
+    }
+
+    /// Vad fordonet är, i ord.
+    func typnamn(_ l: Linje) -> String {
+        switch l.typ {
+        case .sparvagn: return "Spårvagn"
+        case .buss: return "Buss"
+        case .tag: return l.namn == "Öresund" ? "Öresundståg" : "Tåg"
+        }
+    }
+
+    /// Avgångarna från en hållplats de närmaste fonster sekunderna, med
+    /// förseningar när realtiden är igång.
+    func avgangar(_ namn: String, t: Double, fonster: Double = 3600) -> [Avgang] {
         guard let dag else { return [] }
         let live_ = visarLive
         var perTur: [Int: LiveVagn] = [:]
@@ -358,37 +385,69 @@ final class AppModell {
         var lista: [Avgang] = []
         for (ti, i) in dag.avgangar[namn] ?? [] {
             let tur = dag.turer[ti]
-            var f = 0.0, id = "t\(ti)", arLive = false
+            var f = 0.0, id = "t\(ti)", arLive = false, v: LiveVagn?
             if live_ {
-                if let v = perTur[ti] { f = v.fMal; id = v.ref; arLive = true }
-                // Ej ute i realtid: bara turer som inte har startat än.
-                else if tur.avg[i] < t - 120 || tur.start > t + 1800 || tur.start < t { continue }
+                if let lv = perTur[ti] { f = lv.fMal; id = lv.ref; arLive = true; v = lv }
+                // Ej ute i realtid: turer som inte har startat än, och turer som är
+                // utanför kartan, där inga positioner hämtas (tåg på väg in i området).
+                else if tur.avg[i] < t - 120 || (tur.start < t && dag.lage(tur, t) != nil) { continue }
             }
             let avg = tur.avg[i] + f
-            if avg < t - 20 || avg > t + 3600 { continue }
-            lista.append(Avgang(id: id, linje: dag.linjer[tur.linje], mot: dag.namn[tur.mot], tid: avg, sen: f, live: arLive))
+            if avg < t - 20 || avg > t + fonster { continue }
+            lista.append(Avgang(id: id, tur: ti, linje: dag.linjer[tur.linje], mot: mot(tur, live: v), tid: avg, sen: f, live: arLive))
         }
-        return Array(lista.sorted { $0.tid < $1.tid }.prefix(8))
+        return lista.sorted { $0.tid < $1.tid }
+    }
+
+    /// En avgång på tavlan: visa vagnen och flyg dit, om den syns på kartan.
+    func valjAvgang(_ a: Avgang, t: Double) {
+        valt = .vagn(a.id)
+        guard let dag else { return }
+        let tur = dag.turer[a.tur]
+        if let lg = dag.lage(tur, min(tur.slut, max(tur.start, t - a.sen))) {
+            flygTill(CGRect(x: lg.xy.x - 80, y: lg.xy.y - 80, width: 160, height: 160), maxK: 1.2)
+        }
     }
 
     // MARK: Tryck
 
+    /// En vagn mitt under fingret går först, sedan ett hållplatsnamn, sedan en
+    /// vagn en bit bort och sist den närmaste hållplatsen.
     func tryck(_ p: CGPoint) {
         var bast: Fordon?, bd = 26.0
         for f in synliga {
             let s = skarm(f.xy), d = hypot(s.x - p.x, s.y - p.y)
             if d < bd { bd = d; bast = f }
         }
-        if let b = bast { valt = .vagn(b.id); return }
+        if let b = bast, bd < 14 { valt = .vagn(b.id); ovanKortet(p); return }
+        if let namn = namnVid(p) { valt = .hallplats(namn); ovanKortet(p); return }
+        if let b = bast { valt = .vagn(b.id); ovanKortet(p); return }
         if let dag {
-            var namn: String?, bd2 = max(18, 9 * vy.k)
+            var namn: String?, bd2 = max(22, 9 * vy.k)
             for s in dag.stationer where !s.namn.contains("Vändslinga") {
                 let q = skarm(s.p), d = hypot(q.x - p.x, q.y - p.y)
                 if d < bd2 { bd2 = d; namn = s.namn }
             }
-            if let namn { valt = .hallplats(namn); return }
+            if let namn { valt = .hallplats(namn); ovanKortet(p); return }
         }
         valt = nil
+    }
+
+    /// På en smal skärm täcker kortet nedre halvan; det man tryckt på där
+    /// flyttas upp så att det syns ovanför kortet.
+    private func ovanKortet(_ p: CGPoint) {
+        guard storlek.width < 700, p.y > storlek.height * 0.48 else { return }
+        animera(till: Vy(x: vy.x, y: vy.y + (p.y - storlek.height * 0.36) / vy.k, k: vy.k))
+    }
+
+    /// Hållplatsnamnet under punkten p på skärmen, bland de namn som syns.
+    private func namnVid(_ p: CGPoint) -> String? {
+        guard let karta else { return nil }
+        let q = CGPoint(x: vy.x + p.x / vy.k, y: vy.y + p.y / vy.k), marginal = 8 / vy.k
+        return karta.namn.first { n in
+            n.storlek * vy.k >= 6 && !n.namn.isEmpty && !n.namn.contains("Vändslinga")
+                && n.ruta.insetBy(dx: -marginal, dy: -marginal).contains(q)
+        }?.namn
     }
 
     func valjLinje(_ namn: String) {
