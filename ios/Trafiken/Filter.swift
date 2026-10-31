@@ -24,8 +24,10 @@ final class Filter {
 
     func syns(_ l: Linje) -> Bool { !typer.contains(l.typ) && !linjer.contains(l.namn) }
 
-    /// En linje på kartan, efter namnet. Okända linjer syns.
-    func syns(_ namn: String, i dag: Dag) -> Bool { dag.linje(namn).map(syns) ?? true }
+    /// En linje på kartan, efter namnet. Okända linjer (fordon från realtiden som
+    /// inte finns i områdets tidtabell) syns bara när inget är gömt, eftersom man
+    /// inte vet vad de är för slags fordon.
+    func syns(_ namn: String, i dag: Dag) -> Bool { dag.linje(namn).map(syns) ?? !nagot }
 
     /// En hållplats göms när alla linjer som stannar där idag är gömda, eller
     /// när ingen stannar där idag och något är gömt.
