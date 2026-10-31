@@ -20,6 +20,8 @@ Körs i Docker på en hemmaserver och nås på http://localhost:8125.
   hållplats, uppdrag (hitta en viss vagn), Visste du?-fakta ur dagens
   tidtabell och en spårvagnsklocka. Kvar: störningar, helskärm för TV:n.
   Vagnmodellen finns inte i Västtrafiks öppna data, så formen är generisk.
+- **Fas 6, iOS-app (påbörjad):** en riktig app i Swift i `ios/`, som ritar
+  kartan och vagnarna själv och hämtar från samma server. Se `ios/README.md`.
 - **Fas 5, fler områden:** Kungsbacka kommun med bussar och tåg, på en egen
   linjekarta bakom en flik. Bussar ritas som bussar och tåg som tåg. Områdena
   står i `server/omraden.py`.
@@ -87,6 +89,7 @@ Servern (`server/`) är Python med bara standardbiblioteket:
   första tar `?omrade=` (`goteborg` är standard).
 - `omraden.py` anger områdena: vilka slags fordon, rutan de avgränsas av och
   var kartan ligger.
+- `vektor.py` gör om kartan till vektordata för iOS-appen, på `/api/karta`.
 
 Sidan visar varje vagn som sin tur, förskjuten med förseningen. Ändras
 förseningen glider vagnen ikapp eller stannar en stund, men backar aldrig.

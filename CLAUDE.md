@@ -12,6 +12,9 @@ en Claude-session som kör i den här mappen på servern.
 - Två områden, flik på sidan: Göteborg (spårvagnar) och Kungsbacka kommun
   (bussar och tåg), se `server/omraden.py`. Varje område har egen layout i
   `layout/` respektive `layout/kungsbacka/`.
+- iOS-appen ligger i `ios/` (Swift, SwiftUI, XcodeGen) och byggs på en Mac med
+  Xcode, inte på servern. Serverns adress står i `ios/Konfig/Lokal.xcconfig`,
+  som inte checkas in.
 - Sidan är till för ett barn: tydlig, rolig, inga tekniska ord i gränssnittet.
 - Västtrafiks officiella spårvagnskarta har ingen öppen licens; använd den inte,
   länka till den.

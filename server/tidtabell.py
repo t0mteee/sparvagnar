@@ -11,6 +11,8 @@ import zipfile
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
+# Höjs när bygg_dag ändras, så att servern inte använder en gammal dagsfil.
+VERSION = 2
 SPARVAGN = {"0"} | {str(t) for t in range(900, 907)}
 BUSS = {"3"} | {str(t) for t in range(700, 717)}
 TAG = {"2"} | {str(t) for t in range(100, 118)}
@@ -119,9 +121,11 @@ def bygg_dag(zip_path, dag, typer=SPARVAGN, ruta=None):
             if forra and not any(a[6] for a in anrop[forra]):
                 del anrop[forra]
             forra = tur
-        anrop[tur].append((int(r["stop_sequence"]), station(r["stop_id"])["stop_name"],
+        st_ = station(r["stop_id"])
+        anrop[tur].append((int(r["stop_sequence"]), st_["stop_name"],
                            _sek(r["arrival_time"]), _sek(r["departure_time"]),
-                           float(r.get("shape_dist_traveled") or 0), r.get("stop_headsign", ""), inom(r["stop_id"])))
+                           float(r.get("shape_dist_traveled") or 0), r.get("stop_headsign", ""), inom(r["stop_id"]),
+                           st_["stop_id"]))
     if forra and not any(a[6] for a in anrop[forra]):
         del anrop[forra]
 
@@ -153,17 +157,19 @@ def bygg_dag(zip_path, dag, typer=SPARVAGN, ruta=None):
                 continue
             resultat.append({
                 "linje": linje_, "mot": a[-1][1], "skylt": a[0][5] or a[-1][1], "form": form,
-                "stopp": [(n, ank + forskj, avg + forskj, d) for _, n, ank, avg, d, _, _ in a],
+                "stopp": [(n, ank + forskj, avg + forskj, d) for _, n, ank, avg, d, *_ in a],
                 "inne": [x[6] for x in a],
             })
     resultat.sort(key=lambda t: t["stopp"][0][2])
 
-    # Hållplatserna inom rutan, med läge i meter.
-    namn_i_bruk = {s[0] for t in resultat for s, i in zip(t["stopp"], t["inne"]) if i}
+    # Hållplatserna inom rutan, med läge i meter. Läget tas från den hållplats
+    # turerna stannar vid; samma namn finns på flera orter i Västtrafiks område.
     stationer = {}
-    for s in stopp.values():
-        if s["stop_name"] in namn_i_bruk and not s.get("parent_station") and inom(s["stop_id"]):
-            stationer[s["stop_name"]] = meter(float(s["stop_lat"]), float(s["stop_lon"]))
+    for a in anrop.values():
+        for x in a:
+            if x[6]:
+                s = stopp[x[7]]
+                stationer[x[1]] = meter(float(s["stop_lat"]), float(s["stop_lon"]))
     return {"dag": dag.isoformat(), "version": feed.get("feed_version", ""), "turer": resultat,
             "former": former, "stationer": stationer, "typer": typ}
 
@@ -221,5 +227,8 @@ def klientdata(dag, layout):
         "stationer": [[namn_idx[n], x, y] for n, x, y in layout["stationer"]],
         "hopp": hopp,
         "strackor": layout.get("strackor", []),
+        # Hållplatsernas riktiga lägen, så att appen kan hitta den närmaste.
+        "geo": [[namn_idx[n], round(y / KY + LAT0, 5), round(x / KX + LON0, 5)]
+                for n, (x, y) in sorted(dag["stationer"].items()) if n in namn_idx],
         "turer": turer,
     }

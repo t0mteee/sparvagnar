@@ -7,3 +7,11 @@ data/
 
 # Python
 __pycache__/
+
+# iOS: projektet genereras av XcodeGen, och den lokala konfigurationen har
+# serveradress, bundle-id och team.
+ios/*.xcodeproj/
+ios/Konfig/Lokal.xcconfig
+ios/build/
+xcuserdata/
+DerivedData/

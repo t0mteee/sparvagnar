@@ -1,0 +1,10 @@
+// Kopiera till Lokal.xcconfig (checkas inte in) och fyll i.
+//   cp Lokal.exempel.xcconfig Lokal.xcconfig
+//
+// Serverns adress utan https://, till exempel den Cloudflare-adress sidan har.
+SERVER_SCHEME = https
+SERVER_HOST = trafiken.example.se
+// Ett eget bundle-id, gärna ditt domännamn baklänges.
+TRAFIKEN_BUNDLE_ID = se.example.trafiken
+// Team-id från developer.apple.com, eller ditt Personal Team i Xcode.
+DEVELOPMENT_TEAM = ABCDE12345

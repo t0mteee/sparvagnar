@@ -1,0 +1,9 @@
+// Gemensamt för alla. Det som är ditt eget, serverns adress, bundle-id och
+// utvecklarteam, står i Lokal.xcconfig, som inte checkas in. Utgå från
+// Lokal.exempel.xcconfig. Utan den pratar appen med en server på den egna
+// datorn, vilket räcker i simulatorn.
+SERVER_SCHEME = http
+SERVER_HOST = localhost:8125
+TRAFIKEN_BUNDLE_ID = se.exempel.trafiken
+
+#include? "Lokal.xcconfig"

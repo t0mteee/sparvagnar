@@ -1,8 +1,9 @@
 """Ritar appikonen: en spårvagn rakt framifrån över tre linjer, som på kartan.
 
-  python3 verktyg/rita_ikon.py web/
+  python3 verktyg/rita_ikon.py web/ ios/Trafiken/Assets.xcassets/AppIcon.appiconset/ikon-1024.png
 
-Ger ikon-180.png (iPhones hemskärm), ikon-192.png och ikon-512.png (manifestet).
+Ger ikon-180.png (iPhones hemskärm), ikon-192.png och ikon-512.png (manifestet),
+och med en andra sökväg appens ikon i full storlek.
 Kräver Pillow, men bara här; servern behöver bara de färdiga bilderna.
 Motivet håller sig inom mittersta 80 %, så att ikonen tål att beskäras
 till en cirkel (maskable).
@@ -38,4 +39,6 @@ d.rounded_rectangle([x0 + 150, y1 - 60, x1 - 150, y1 - 30], radius=12, fill=BG)
 ut = Path(sys.argv[1])
 for storlek in (180, 192, 512):
     im.resize((storlek, storlek), Image.LANCZOS).save(ut / f"ikon-{storlek}.png", optimize=True)
+if len(sys.argv) > 2:
+    im.save(sys.argv[2], optimize=True)
 print("ikoner i", ut)

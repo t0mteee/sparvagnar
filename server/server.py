@@ -9,6 +9,7 @@ serversidan. Bara standardbiblioteket, ingen pip.
   GET /api/dag?omrade=      dagens turer, vägar och linjer
   GET /api/live?omrade=     senaste positionerna, kopplade till turerna
   GET /api/status           vad servern håller på med, per område
+  GET /api/karta?omrade=    kartan som vektordata, för appen (se vektor.py)
 
 omrade är goteborg (spårvagnarna, standard) eller kungsbacka (bussar och tåg),
 se omraden.py. Tidtabellen hämtas från Trafiklab högst en gång per dygn.
@@ -32,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import realtid  # noqa: E402
 import tidtabell  # noqa: E402
 from omraden import OMRADEN  # noqa: E402
+from vektor import vektor  # noqa: E402
 
 ROT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("DATA", ROT / "data"))
@@ -65,6 +67,8 @@ class Omrade:
         text = (mapp / "layout.json").read_bytes()
         self.layout = json.loads(text)
         self.version = hashlib.sha1(self.karta + text).hexdigest()[:12]
+        self.vektor = gzip.compress(json.dumps(dict(vektor(self.karta), version=self.version),
+                                               ensure_ascii=False, separators=(",", ":")).encode())
         self.dag = None          # intern dagsdata
         self.klient = None       # gzippad JSON till sidan
         self.matchning = None
@@ -118,7 +122,7 @@ def hamta_gtfs():
 
 
 def bygg(omr, dag):
-    cache = DATA / f"dag-{omr.nyckel}-{dag.isoformat()}.json.gz"
+    cache = DATA / f"dag-{omr.nyckel}-v{tidtabell.VERSION}-{dag.isoformat()}.json.gz"
     if cache.exists() and cache.stat().st_mtime >= ZIP.stat().st_mtime:
         with gzip.open(cache, "rt", encoding="utf-8") as f:
             d = json.load(f)
@@ -241,6 +245,8 @@ class Handler(BaseHTTPRequestHandler):
             self.json(404, {"fel": "området finns inte"})
         elif vag == "/karta.svg":
             self.skicka(200, omr.karta, "image/svg+xml")
+        elif vag == "/api/karta":
+            self.skicka(200, omr.vektor, "application/json; charset=utf-8", gz=True)
         elif vag == "/api/dag":
             with lager:
                 klient = omr.klient
