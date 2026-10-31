@@ -69,7 +69,10 @@ m = re.search(r'height="([\d.]+)" latlng-box="([^"]+)" viewBox="0 0 ([\d.]+) ([\
 H, (lon0, lat0, lon1, lat1), W = float(m.group(1)), map(float, m.group(2).split(",")), float(m.group(3))
 X0, Y0 = merc(lon0, lat0)
 X1, Y1 = merc(lon1, lat1)
-skala = (W - H) / ((X1 - X0) - (Y1 - Y0))
+# Bredd och höjd är utbredningen gånger skalan plus samma marginal. Är kartan
+# nästan kvadratisk går skalan inte att räkna ut så; då gäller transitmaps
+# standard, en tiondel.
+skala = (W - H) / ((X1 - X0) - (Y1 - Y0)) if abs((X1 - X0) - (Y1 - Y0)) > 100 else 0.1
 pad = (W - (X1 - X0) * skala) / 2
 
 def till_svg(lon, lat):

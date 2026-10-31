@@ -2,7 +2,9 @@
 
 Göteborgs alla spårvagnar i rörelse på en schematisk linjekarta: raka linjer,
 45°-vinklar, prickar som glider mellan hållplatserna i takt med verkligheten.
-En flik visar bussarna och tågen i Kungsbacka kommun på samma sätt.
+En meny byter till Göteborgs bussar och båtar, eller till bussarna och tågen i
+någon av de andra kommunerna i Västtrafiks område, var och en på sin egen
+karta. Ett filter väljer vilka slags fordon och vilka linjer som syns.
 Körs i Docker på en hemmaserver och nås på http://localhost:8125.
 
 ## Faser
@@ -25,6 +27,9 @@ Körs i Docker på en hemmaserver och nås på http://localhost:8125.
 - **Fas 5, fler områden:** Kungsbacka kommun med bussar och tåg, på en egen
   linjekarta bakom en flik. Bussar ritas som bussar och tåg som tåg. Områdena
   står i `server/omraden.py`.
+- **Fas 7, hela Västtrafik:** Göteborgs bussar, båtar och tåg, och tio
+  områden till (se Områdena nedan). Flikarna har blivit en meny, och ett
+  filter (tratten) gömmer slag av fordon eller enskilda linjer.
 
 Västtrafiks officiella spårvagnskarta har ingen öppen licens och används
 därför inte; sidan länkar till den. `verktyg/bygg_forhandsvisning.py` gör en
@@ -41,8 +46,8 @@ docker compose up -d
 ```
 
 Sidan finns sedan på http://localhost:8125, och från andra enheter på
-hemmanätet på samma port med serverns namn. Fliken uppe till vänster byter
-område; `?omrade=kungsbacka` i adressen går direkt dit.
+hemmanätet på samma port med serverns namn. Namnet uppe till vänster öppnar
+listan över områden; `?omrade=kungsbacka` i adressen går direkt dit.
 
 På iPhone går sidan att lägga på hemskärmen (Dela, Lägg till på hemskärmen).
 Den öppnas då i helskärm som en egen app, med ikon och namnet Trafiken
@@ -87,8 +92,8 @@ Servern (`server/`) är Python med bara standardbiblioteket:
 - `server.py` serverar sidan (`web/index.html`), områdets karta och tre
   API-anrop: `/api/dag`, `/api/live` och `/api/status`. Kartan och de två
   första tar `?omrade=` (`goteborg` är standard).
-- `omraden.py` anger områdena: vilka slags fordon, rutan de avgränsas av och
-  var kartan ligger.
+- `omraden.py` anger områdena: vilka slags fordon, rutan de avgränsas av,
+  vilka linjer och var kartan ligger.
 - `vektor.py` gör om kartan till vektordata för iOS-appen, på `/api/karta`.
 
 Sidan visar varje vagn som sin tur, förskjuten med förseningen. Ändras
@@ -129,6 +134,73 @@ python3 verktyg/bygg_layout.py layout/kungsbacka/octi_jamn.json data/kungsbacka 
     "$(command -v transitmap)" layout/kungsbacka/ --knutar "Kungsbacka station"
 ```
 
+De andra områdena byggs på samma sätt; bara fisheye-centrum, styrkan och
+bytespunkterna skiljer (se Områdena nedan). `<omr>` är områdets nyckel i
+`server/omraden.py`:
+
+```
+python3 verktyg/plocka_gtfs.py data/vt.zip data/<omr> <omr>
+python3 verktyg/vanliga_turer.py data/<omr> data/<omr>_vanlig
+python3 verktyg/farga_linjer.py data/<omr>_vanlig > layout/<omr>/farger.json
+gtfs2graph data/<omr>_vanlig > graph.json
+topo -d 110 < graph.json > topo.json
+python3 verktyg/forstora_centrum.py topo.json <styrka> <lat> <lon> | loom | octi > layout/<omr>/octi.json
+python3 verktyg/jamna_avstand.py layout/<omr>/octi.json > layout/<omr>/octi_jamn.json
+python3 verktyg/bygg_layout.py layout/<omr>/octi_jamn.json data/<omr>_vanlig layout/<omr>/farger.json \
+    "$(command -v transitmap)" layout/<omr>/ --knutar "<bytespunkt>,<bytespunkt>"
+```
+
+LOOM:s egen Dockerfile bygger inte längre (för gammal cmake i Ubuntu 20.04).
+Den här gör det, utan Gurobi:
+
+```
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates libglpk-dev glpk-utils \
+    coinor-libcbc-dev coinor-cbc libprotobuf-dev libzip-dev protobuf-compiler make cmake g++ git
+RUN git clone --recurse-submodules https://github.com/ad-freiburg/loom /loom
+RUN cd /loom && mkdir -p build && cd build && cmake .. && make -j6 install
+CMD ["loom"]
+```
+
+`docker build -t loom .` i en mapp med den filen, sedan `docker run --rm -i loom
+<verktyg>`. `gtfs2graph` läser en mapp, så den skickas in som tar:
+`tar -C data/<omr>_vanlig -cf - . | docker run --rm -i loom sh -c 'mkdir /g &&
+tar -C /g -xf - && gtfs2graph /g'`.
+
+### Områdena
+
+Varje område är en kommun (eller två som hänger ihop) och har sin egen
+karta. Rutorna i `server/omraden.py` följer ungefär kommungränserna. En linje
+som går ut ur rutan ritas bara inom den.
+
+| Nyckel | Område | Fordon | Styrka | Bytespunkter |
+| --- | --- | --- | --- | --- |
+| `goteborg` | Göteborg | spårvagnar | 0.55 | se ovan |
+| `goteborg-buss` | Göteborg, bussar och båtar | bussar 16–99, båtar, tåg | 0.55 | Frölunda Torg, Hjalmar Brantingsplatsen, Angered Centrum, Marklandsgatan, Korsvägen, Brunnsparken, Nils Ericson Terminalen |
+| `kungsbacka` | Kungsbacka | bussar och tåg | 0.6 | Kungsbacka station |
+| `molndal` | Mölndal och Härryda | bussar och tåg | 0.6 | Mölndals bro, Mölnlycke resecentrum |
+| `partille` | Partille | bussar och tåg | 0.6 | Partille centrum |
+| `lerum` | Lerum | bussar och tåg | 0.6 | Lerum station, Floda station, Gråbo busstation |
+| `kungalv` | Kungälv | bussar och tåg | 0.6 | Kungälv resecentrum, Ytterby station |
+| `alingsas` | Alingsås | bussar och tåg | 0.6 | Alingsås station, Lendahlsgatan |
+| `boras` | Borås | bussar och tåg | 0.45, `topo -d 150` | Borås resecentrum, Södra Älvsborgs sjukhus |
+| `trollhattan` | Trollhättan och Vänersborg | bussar och tåg | 0.7 | Trollhättan resecentrum, Vänersborg resecentrum, NÄL |
+| `uddevalla` | Uddevalla | bussar och tåg | 0.6 | Kampenhof, Uddevalla central |
+| `lidkoping` | Lidköping | bussar och tåg | 0.6 | Nya stadens torg, Lidköping resecentrum |
+| `skovde` | Skövde | bussar och tåg | 0.6 | Skövde resecentrum |
+
+Fisheye-centrum är den största bytespunkten. Skollinjerna 900–999 ritas inte,
+eftersom de bara kör skoldagar.
+
+Göteborgs bussar har en egen karta i stället för att ritas på
+spårvagnskartan. Spårvagnskartan har 12 linjer; med stadsbussarna blir det
+över 60, och knippena genom centrum blir då så breda att spårvagnarna
+försvinner i dem. Regionbussarna (tre siffror) och X-linjerna kör till
+grannkommunerna och syns på deras kartor, och E-linjerna ersätter spårvagnar
+en tid och ritas inte. Båtarna i älven och skärgården och pendeltågen inom
+kommunen kommer med, eftersom de hör till samma resor.
+
 `plocka_gtfs.py` plockar ut områdets linjer ur hela Västtrafiks tidtabell.
 Har området en ruta tas bara den del av turerna som ligger inom den, så att
 tåg och expressbussar slutar vid gränsen.
@@ -155,12 +227,26 @@ Varje linjebit och hållplats i kartan märks dessutom med sträckorna och namne
 den hör till, så att sidan kan tona ner det som ingen vagn kör idag, till
 exempel ett avstängt spår.
 
-Resultatet ligger i `layout/` för Göteborg och `layout/kungsbacka/`:
+Resultatet ligger i `layout/` för Göteborgs spårvagnar och i `layout/<omr>/`
+för de andra:
 LOOM:s graf (`octi.json` och den utjämnade `octi_jamn.json`), kartan
 (`karta.svg`) och vagnarnas vägar längs varje linje mellan hållplatserna
 (`layout.json`). Servern läser bara det, så varken LOOM
 eller transitmap behövs på servern. Görs om när linjenätet ändras.
 Tidtabellsdatan från Trafiklab är CC0.
+
+## Filtret
+
+Tratten bland knapparna (i appen knappen med de tre strecken) öppnar filtret:
+en knapp per slag av fordon i området (spårvagnar, bussar, tåg, båtar) och en
+per linje. Det som är avslaget göms på kartan, i linjeraden, bland vagnarna
+och på avgångstavlorna. Med något gömt göms också linjer och hållplatser som
+ingen kör idag, så att bara det valda syns. Filtret sparas per område, i
+webbläsaren (`localStorage`) och i appen (`UserDefaults`).
+
+Västtrafik ger högst 200 fordon per anrop. Får servern så många för en ruta
+delas rutan i fyra och hämtas igen (`realtid.py`), så att Göteborgs bussar
+mitt på dagen inte tappas.
 
 ## Så rör sig vagnarna
 

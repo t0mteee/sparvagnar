@@ -86,13 +86,38 @@ a { color: var(--signal); }
 }
 .topp h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .dold { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-/* Flikarna för områdena, där rubriken annars står */
-.omraden { display: flex; gap: 5px; margin: 0 0 3px; }
+/* Områdets namn, där rubriken annars står. Ett tryck öppnar listan med alla områden. */
+.omraden { display: flex; margin: 0 0 3px; min-width: 0; }
 .omraden button {
-  min-height: 28px; padding: 2px 9px; border-radius: 999px; font-size: 13px; font-weight: 700;
-  letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); background: transparent;
+  min-height: 28px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; min-width: 0;
+  letter-spacing: 0.1em; text-transform: uppercase; background: var(--text); border-color: var(--text); color: var(--bg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.omraden button[aria-current="page"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.omraden button::after { content: " ▾"; }
+.meny {
+  z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 10px); left: max(10px, env(safe-area-inset-left, 0px));
+  width: min(340px, calc(100% - 20px)); max-height: calc(100% - 40px); overflow: auto; padding: 12px; display: grid; gap: 6px;
+}
+.meny h2, .filter-ruta h2 { margin: 0 44px 2px 2px; font-size: 21px; }
+.meny button { text-align: left; font-size: 18px; min-height: 44px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.meny button small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.meny button[aria-current="page"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.meny button[aria-current="page"] small { color: var(--bg); }
+.meny .stang, .filter-ruta .stang { position: absolute; top: 8px; right: 8px; width: 38px; padding: 0; }
+/* Filtret: vilka slags fordon och linjer som syns. */
+.filter-ruta {
+  z-index: 4; top: calc(env(safe-area-inset-top, 0px) + 10px); right: max(66px, calc(env(safe-area-inset-right, 0px) + 66px));
+  width: min(380px, calc(100% - 20px)); max-height: calc(100% - 40px); overflow: auto; padding: 12px 14px 14px; display: grid; gap: 10px;
+}
+.filter-ruta h3 { margin: 4px 0 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.slag { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.slag button { min-height: 46px; font-size: 18px; display: flex; gap: 8px; align-items: center; justify-content: center; }
+.slag button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.slag button[aria-pressed="false"], .filter-linjer .chip[aria-pressed="false"] { opacity: 0.38; text-decoration: line-through; }
+.slag button[aria-pressed="true"] { background: var(--knapp); color: var(--text); border-color: var(--text); }
+.filter-linjer { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-linjer .chip[aria-pressed="true"] { outline: none; }
+#karta .gomd { display: none; }
 .klocka { font-family: var(--mono); font-size: 32px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .topp.spelar .klocka { color: var(--signal); }
 .status { display: flex; gap: 4px 10px; align-items: baseline; flex-wrap: wrap; font-size: 16px; color: var(--muted); }
@@ -211,10 +236,12 @@ a { color: var(--signal); }
 @keyframes pop { from { transform: translate(-50%, -50%) scale(0.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 @media (min-width: 760px) {
-  .linjer { justify-content: center; flex-wrap: wrap; }
+  /* Många linjer (Göteborgs bussar): högst två rader, resten går att skrolla fram. */
+  .linjer { justify-content: center; flex-wrap: wrap; max-height: 82px; overflow-y: auto; }
   .fakta { text-align: center; }
 }
 @media (max-width: 640px) {
+  .filter-ruta { right: max(10px, env(safe-area-inset-right, 0px)); }
   .ikoner { gap: 6px; }
   .ikon { width: 42px; height: 42px; }
   .ikon svg { width: 20px; height: 20px; }
@@ -250,6 +277,9 @@ a { color: var(--signal); }
     </button>
     <button class="ikon" id="tema" aria-label="Byt till dag"></button>
     <button class="ikon" id="ljud" aria-label="Stäng av ljudet"></button>
+    <button class="ikon" id="filter" aria-label="Välj vad som syns" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16l-6 7.5V19l-4 2v-8.5z"/></svg>
+    </button>
     <button class="ikon" id="uppdrag" aria-label="Starta ett uppdrag" aria-pressed="false">
       <svg viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>
     </button>
@@ -281,6 +311,21 @@ a { color: var(--signal); }
 
   <div class="panel toast" id="toast" hidden role="status"></div>
 
+  <section class="panel meny" id="meny" hidden role="dialog" aria-labelledby="meny-rubrik">
+    <button class="stang" id="meny-stang" aria-label="Stäng">✕</button>
+    <h2 id="meny-rubrik">Var vill du titta?</h2>
+    <div id="meny-lista" style="display:grid;gap:6px"></div>
+  </section>
+
+  <section class="panel filter-ruta" id="filter-ruta" hidden role="dialog" aria-labelledby="filter-rubrik">
+    <button class="stang" id="filter-stang" aria-label="Stäng">✕</button>
+    <h2 id="filter-rubrik">Vad vill du se?</h2>
+    <div class="slag" id="filter-slag"></div>
+    <h3>Linjer</h3>
+    <div class="filter-linjer" id="filter-linjer"></div>
+    <div class="knapprad"><button id="filter-alla">Visa alla</button><button id="filter-inga">Göm alla</button></div>
+  </section>
+
   <section class="panel om-ruta" id="om" hidden role="dialog" aria-labelledby="om-rubrik">
     <button class="stang" id="om-stang" aria-label="Stäng">✕</button>
     <h2 id="om-rubrik"><span class="ord-alla">Spårvagnarna</span> just nu</h2>
@@ -292,6 +337,8 @@ a { color: var(--signal); }
       <li><b>1×</b> växlar till <b>10×</b> och <b>60×</b>, som spelar upp dagen snabbare. <b>Live</b> går tillbaka till nu.</li>
       <li><b>Gråa</b> hållplatser och linjer har inga <span class="ord-inga">spårvagnar</span> idag, till exempel när ett spår lagas.</li>
       <li><b>Flaggan</b> ger dig ett uppdrag: hitta en viss vagn på kartan.</li>
+      <li><b>Tratten</b> väljer vad som syns, till exempel bara båtarna eller bara en linje.</li>
+      <li><b>Namnet uppe till vänster</b> byter till en annan stad.</li>
     </ul>
     <h3>Tecken på kartan</h3>
     <ul>
@@ -320,7 +367,10 @@ a { color: var(--signal); }
   const OMRADE = new URLSearchParams(location.search).get("omrade") || las("omrade", "goteborg");
   const Q = "omrade=" + encodeURIComponent(OMRADE);
   // Vad fordonen heter, efter vilka slags fordon området har.
-  const ORD_TYP = { sparvagn: ["en spårvagn", "spårvagnar"], buss: ["en buss", "bussar"], tag: ["ett tåg", "tåg"] };
+  // [en, flera, ental, alla]
+  const ORD_TYP = { sparvagn: ["en spårvagn", "spårvagnar", "spårvagn", "spårvagnarna"], buss: ["en buss", "bussar", "buss", "bussarna"],
+    tag: ["ett tåg", "tåg", "tåg", "tågen"], bat: ["en båt", "båtar", "båt", "båtarna"] };
+  const TYPER = ["sparvagn", "buss", "tag", "bat"];
   let ORDEN = { en: "en spårvagn", ental: "spårvagn", flera: "spårvagnar", inga: "spårvagnar", alla: "spårvagnarna" };
   const stor = t => t[0].toUpperCase() + t.slice(1);
   // Vita och svarta linjer (spårvagnarna 1, 11 och X) behöver en kant för att synas mot kartan.
@@ -468,10 +518,87 @@ a { color: var(--signal); }
     // Hållplatser på kartan där ingen vagn stannar idag (vändslingor räknas inte).
     const stannar = new Set(turer.flatMap(t => t.stopp.map(n => D.namn[n])));
     tysta = [...new Set(stationer.map(s => s.namn))].filter(n => !stannar.has(n) && !n.includes("Vändslinga")).sort();
+    hplLinjer = new Map();
+    for (const t of turer) for (const n of t.stopp) {
+      const namn = D.namn[n];
+      if (!hplLinjer.has(namn)) hplLinjer.set(namn, new Set());
+      hplLinjer.get(namn).add(linjer[t.linje].namn);
+    }
+    lasFilter();
     byggFakta();
     byggChips();
     tonaNerIdag();
+    tillampaFilter();
   }
+
+  // ---------- Filtret: vilka slags fordon och linjer som syns ----------
+  // Sparas per område: de slag och linjer man har gömt.
+  let filt = { typer: new Set(), linjer: new Set() }, hplLinjer = new Map();
+  const filterNyckel = () => "filter-" + (D.omrade || OMRADE);
+  function lasFilter() {
+    try { const f = JSON.parse(las(filterNyckel(), "{}")); filt = { typer: new Set(f.typer || []), linjer: new Set(f.linjer || []) }; }
+    catch { filt = { typer: new Set(), linjer: new Set() }; }
+  }
+  const sparaFilter = () => spara(filterNyckel(), JSON.stringify({ typer: [...filt.typer], linjer: [...filt.linjer] }));
+  // Linjen syns om varken den eller dess slag är gömd. Okända linjer (en vagn
+  // som inte gick att koppla) syns om inte alla slag är gömda.
+  function syns(namn) {
+    const l = linjer.find(x => x.namn === namn);
+    if (!l) return filt.typer.size < omradetsTyper().length;
+    return !filt.linjer.has(namn) && !filt.typer.has(l.typ || "sparvagn");
+  }
+  const omradetsTyper = () => TYPER.filter(t => linjer.some(l => (l.typ || "sparvagn") === t));
+  // En hållplats göms när alla linjer som stannar där idag är gömda.
+  // Med ett filter göms också hållplatser där ingen stannar idag.
+  const hplGomd = namn => { if (!filt.typer.size && !filt.linjer.size) return false; const s = hplLinjer.get(namn); return !s || ![...s].some(syns); };
+  const filterStil = document.createElement("style"); document.head.appendChild(filterStil);
+  const IKON_TYP = {
+    sparvagn: '<svg viewBox="0 0 24 24"><rect x="5" y="6" width="14" height="12" rx="3"/><path d="M5 12h14M9 18l-2 3M15 18l2 3M12 6V3M9 3h6"/></svg>',
+    buss: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="13" rx="3"/><path d="M4 11h16M7 17v3M17 17v3"/></svg>',
+    tag: '<svg viewBox="0 0 24 24"><path d="M6 4h12a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a2 2 0 0 1 2-2zM4 11h16M8 18l-2 3M16 18l2 3"/></svg>',
+    bat: '<svg viewBox="0 0 24 24"><path d="M3 15l2 4h14l2-4zM6 15V9h12v6M9 9V5h6v4"/></svg>',
+  };
+  function tillampaFilter() {
+    // Med ett filter göms allt utom de valda linjerna, även linjer på kartan som
+    // inte kör idag (de har inget slag att välja efter).
+    const nagot = filt.typer.size || filt.linjer.size;
+    filterStil.textContent = nagot ? `#karta .L${linjer.filter(l => syns(l.namn)).map(l => `:not(.L-${CSS.escape(l.namn)})`).join("")} { display: none; }` : "";
+    const svgEl = karta.querySelector("svg");
+    if (svgEl) svgEl.querySelectorAll("[data-n]").forEach(el => el.classList.toggle("gomd", hplGomd(el.dataset.n)));
+    [...linjeRad.children].forEach(b => { b.hidden = !syns(b.textContent); });
+    if (markerad && !syns(markerad)) { markerad = null; markera(); }
+    $("filter").setAttribute("aria-pressed", String(!!nagot));
+    byggFilter();
+  }
+  function byggFilter() {
+    const typer = omradetsTyper();
+    $("filter-slag").hidden = typer.length < 2;
+    $("filter-slag").innerHTML = typer.map(t => `<button data-typ="${t}" aria-pressed="${!filt.typer.has(t)}">${IKON_TYP[t]}${stor(ORD_TYP[t][1])}</button>`).join("");
+    $("filter-slag").querySelectorAll("button").forEach(b => b.onclick = () => {
+      const t = b.dataset.typ;
+      if (filt.typer.has(t)) filt.typer.delete(t); else filt.typer.add(t);
+      // Slår man på ett slag igen syns alla dess linjer.
+      if (!filt.typer.has(t)) for (const l of linjer) if ((l.typ || "sparvagn") === t) filt.linjer.delete(l.namn);
+      sparaFilter(); tillampaFilter();
+    });
+    const lista_ = $("filter-linjer");
+    lista_.textContent = "";
+    for (const l of linjer) {
+      if (filt.typer.has(l.typ || "sparvagn")) continue;
+      const b = document.createElement("button");
+      b.className = "chip"; b.textContent = l.namn; b.style.background = l.farg; b.style.color = l.text;
+      b.style.boxShadow = vit(l) || svart(l) ? "inset 0 0 0 1px #7b8a99" : "";
+      b.setAttribute("aria-pressed", String(!filt.linjer.has(l.namn)));
+      b.setAttribute("aria-label", `Linje ${l.namn}, ${filt.linjer.has(l.namn) ? "gömd" : "syns"}`);
+      b.onclick = () => { if (filt.linjer.has(l.namn)) filt.linjer.delete(l.namn); else filt.linjer.add(l.namn); sparaFilter(); tillampaFilter(); };
+      lista_.appendChild(b);
+    }
+  }
+  $("filter").onclick = () => { $("filter-ruta").hidden = !$("filter-ruta").hidden; $("meny").hidden = true; };
+  $("filter-stang").onclick = () => { $("filter-ruta").hidden = true; };
+  $("meny-stang").onclick = () => { $("meny").hidden = true; };
+  $("filter-alla").onclick = () => { filt = { typer: new Set(), linjer: new Set() }; sparaFilter(); tillampaFilter(); };
+  $("filter-inga").onclick = () => { filt.linjer = new Set(linjer.filter(l => !filt.typer.has(l.typ || "sparvagn")).map(l => l.namn)); sparaFilter(); tillampaFilter(); };
   // Tonar ner linjebitar som ingen av dagens turer kör över, och hållplatser där
   // ingen stannar. Kartans bitar bär sträckorna de hör till (data-s) och
   // hållplatsens namn (data-n).
@@ -488,12 +615,14 @@ a { color: var(--signal); }
     svgEl.querySelectorAll("[data-n]").forEach(el => el.classList.toggle("tyst", !stannar.has(el.dataset.n)));
   }
   // Områdets namn och fordonens namn i rubriken, flikarna och hjälptexten.
+  // "bussar, tåg och båtar": orden för områdets slags fordon, ihopsatta.
+  const lista = (ord, och) => ord.length < 2 ? ord.join("") : `${ord.slice(0, -1).join(", ")} ${och} ${ord[ord.length - 1]}`;
   function satOmrade() {
-    const typer = new Set(linjer.map(l => l.typ || "sparvagn"));
-    ORDEN = typer.has("sparvagn") ? { en: "en spårvagn", ental: "spårvagn", flera: "spårvagnar", inga: "spårvagnar", alla: "spårvagnarna" }
-      : typer.has("tag") ? { en: "en buss eller ett tåg", ental: "buss eller tåg", flera: "bussar och tåg", inga: "bussar eller tåg", alla: "bussarna och tågen" }
-      : { en: "en buss", ental: "buss", flera: "bussar", inga: "bussar", alla: "bussarna" };
-    const omraden = D.omraden || [[OMRADE, "Göteborg"]], namn = (omraden.find(o => o[0] === D.omrade) || omraden[0])[1];
+    const typer = TYPER.filter(t => linjer.some(l => (l.typ || "sparvagn") === t)), o = i => typer.map(t => ORD_TYP[t][i]);
+    ORDEN = { en: lista(o(0), "eller"), ental: lista(o(2), "eller"), flera: lista(o(1), "och"), inga: lista(o(1), "eller"), alla: lista(o(3), "och") };
+    const omraden = D.omraden || [[OMRADE, "Göteborg"]], omrNamn = (omraden.find(o => o[0] === D.omrade) || omraden[0])[1];
+    // "Göteborg, bussar och båtar" är Göteborg i rubriken.
+    const namn = omrNamn.split(",")[0];
     $("rubrik").textContent = `${stor(ORDEN.flera)} i ${namn}`;
     document.documentElement.dataset.omrade = D.omrade || OMRADE;
     document.title = `Trafiken i ${namn}`;
@@ -502,21 +631,29 @@ a { color: var(--signal); }
     document.querySelectorAll(".ord-inga").forEach(e => e.textContent = ORDEN.inga);
     document.querySelectorAll(".ord-alla").forEach(e => e.textContent = stor(ORDEN.alla));
     document.querySelectorAll(".omr-namn").forEach(e => e.textContent = namn);
-    // Flikar när det finns flera områden. Ett byte laddar om sidan med det nya området.
+    // Med flera områden blir namnet en knapp som öppnar listan. Ett byte laddar
+    // om sidan med det nya området.
     const nav = $("omraden");
     nav.hidden = omraden.length < 2;
     $("rubrik").classList.toggle("dold", omraden.length >= 2);
-    if (omraden.length >= 2 && !nav.children.length) for (const [nyckel, n] of omraden) {
-      const b = document.createElement("button");
-      b.textContent = n;
-      if (nyckel === D.omrade) b.setAttribute("aria-current", "page");
-      b.onclick = () => {
-        if (nyckel === D.omrade) return;
-        spara("omrade", nyckel);
-        try { history.replaceState(null, "", `?omrade=${encodeURIComponent(nyckel)}`); } catch {}
-        location.reload();
-      };
-      nav.appendChild(b);
+    if (omraden.length >= 2 && !nav.children.length) {
+      const knapp = document.createElement("button");
+      knapp.textContent = omrNamn; knapp.setAttribute("aria-label", `${omrNamn}. Byt stad`);
+      knapp.onclick = () => { $("meny").hidden = !$("meny").hidden; $("filter-ruta").hidden = true; };
+      nav.appendChild(knapp);
+      for (const [nyckel, n] of omraden) {
+        const b = document.createElement("button"), [forst, ...rest] = n.split(", ");
+        b.innerHTML = `<span>${esc(forst)}</span>${rest.length ? `<small>${esc(rest.join(", "))}</small>` : nyckel === "goteborg" ? "<small>spårvagnar</small>" : ""}`;
+        if (nyckel === D.omrade) b.setAttribute("aria-current", "page");
+        b.onclick = () => {
+          $("meny").hidden = true;
+          if (nyckel === D.omrade) return;
+          spara("omrade", nyckel);
+          try { history.replaceState(null, "", `?omrade=${encodeURIComponent(nyckel)}`); } catch {}
+          location.reload();
+        };
+        $("meny-lista").appendChild(b);
+      }
     }
     spara("omrade", D.omrade || OMRADE);
   }
@@ -538,6 +675,7 @@ a { color: var(--signal); }
   // Vita och svarta linjer får en kant runt sig, lika tjock oavsett linjebredd.
   karta.style.setProperty("--kantbredd", `${LB + 1.6}px`);
   tonaNerIdag();
+  tillampaFilter();
 
   // ---------- Läge längs spåret ----------
   function punktVid(h, mal) {
@@ -810,7 +948,10 @@ a { color: var(--signal); }
     tillampa();
   }
   function startvy() {
-    const bp = stationer.find(s => s.namn === "Brunnsparken") || { x: W / 2, y: H / 2 };
+    // Annars den största bytespunkten.
+    const knut = [...svg.querySelectorAll("circle.knut")].sort((a, b) => b.getAttribute("r") - a.getAttribute("r"))[0];
+    const bp = stationer.find(s => s.namn === "Brunnsparken")
+      || (knut ? { x: +knut.getAttribute("cx"), y: +knut.getAttribute("cy") } : { x: W / 2, y: H / 2 });
     const k = Math.max(minK, Math.min(bredd, hojd) / (W * 0.5));
     return { k, x: bp.x - bredd / 2 / k, y: bp.y - hojd / 2 / k };
   }
@@ -916,7 +1057,7 @@ a { color: var(--signal); }
       return;
     }
     let hpl = null; bd = Math.max(16, 9 * vy.k);
-    for (const s of stationer) { if (s.namn.includes("Vändslinga")) continue; const d = Math.hypot((s.x - vy.x) * vy.k - sx, (s.y - vy.y) * vy.k - sy); if (d < bd) { bd = d; hpl = s.namn; } }
+    for (const s of stationer) { if (s.namn.includes("Vändslinga") || hplGomd(s.namn)) continue; const d = Math.hypot((s.x - vy.x) * vy.k - sx, (s.y - vy.y) * vy.k - sy); if (d < bd) { bd = d; hpl = s.namn; } }
     if (hpl) { valj({ typ: "hpl", namn: hpl }); return; }
     stang();
   }
@@ -927,7 +1068,7 @@ a { color: var(--signal); }
   }
   function stang() { valt = null; folj = null; kort.hidden = true; }
   $("stang").onclick = stang;
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { stang(); $("om").hidden = true; } });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { stang(); $("om").hidden = true; $("meny").hidden = true; $("filter-ruta").hidden = true; } });
   $("info").onclick = () => { $("om").hidden = !$("om").hidden; };
   $("hem").onclick = () => { folj = null; flygning = { fran: { ...vy }, mal: startvy(), t0: performance.now() }; };
   if (document.fullscreenEnabled) {
@@ -1004,6 +1145,7 @@ a { color: var(--signal); }
   function visaTavla(t) {
     const namn = valt.namn, lista = [];
     for (const [tur, i] of stationTurer.get(namn) || []) {
+      if (!syns(linjer[tur.linje].namn)) continue;
       let f = 0, id = tur, liveRef = null;
       if (visarLive()) {
         liveRef = live.perTur.get(tur.index);
@@ -1039,6 +1181,7 @@ a { color: var(--signal); }
     const lista = [];
     if (visarLive()) {
       for (const [ref, v] of live.vagnar) {
+        if (!syns(v.l)) continue;
         const linjeIdx = linjer.findIndex(x => x.namn === v.l);
         if (v.tur >= 0 && turer[v.tur]) {
           // Visad försening följer den rapporterade mjukt: vagnen kan stanna, men aldrig backa.
@@ -1060,7 +1203,7 @@ a { color: var(--signal); }
       }
     } else {
       for (const tur of turer) {
-        if (t < tur.start || t > tur.slut) continue;
+        if (t < tur.start || t > tur.slut || !syns(linjer[tur.linje].namn)) continue;
         const lg = lage(tur, t); if (lg) lista.push({ id: tur, linje: tur.linje, xy: lg.xy, sen: 0, tur, lg });
       }
     }
@@ -1140,6 +1283,7 @@ a { color: var(--signal); }
     sparvagn: { moduler: 3, min: 48, skala: 38, fram: 1.3, bak: 1 },
     buss: { moduler: 1, min: 24, skala: 17, fram: 0.9, bak: 0.6 },
     tag: { moduler: 4, min: 66, skala: 56, fram: 1.7, bak: 1.7 },
+    bat: { moduler: 1, min: 30, skala: 24, fram: 2.6, bak: 0.5 },
   };
   function ritaFordon(v, l, vald_, nuMs) {
     const form = FORM[l.typ] || FORM.sparvagn, n = form.moduler, mitt = Math.floor((n - 1) / 2);

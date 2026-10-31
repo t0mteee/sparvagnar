@@ -11,8 +11,9 @@ serversidan. Bara standardbiblioteket, ingen pip.
   GET /api/status           vad servern håller på med, per område
   GET /api/karta?omrade=    kartan som vektordata, för appen (se vektor.py)
 
-omrade är goteborg (spårvagnarna, standard) eller kungsbacka (bussar och tåg),
-se omraden.py. Tidtabellen hämtas från Trafiklab högst en gång per dygn.
+omrade är en nyckel i omraden.py: goteborg (spårvagnarna, standard),
+goteborg-buss, kungsbacka, boras och så vidare. Tidtabellen hämtas från
+Trafiklab högst en gång per dygn.
 Positionerna hämtas var 5:e sekund, men bara för områden som någon har öppna.
 """
 import gzip
@@ -132,7 +133,7 @@ def bygg(omr, dag):
     logg(f"bygger tidtabellen för {omr.conf['namn']} {dag}")
     satt_status(omr, tidtabell=f"bygger {dag}")
     t0 = time.time()
-    d = tidtabell.bygg_dag(ZIP, dag, omr.conf["typer"], omr.conf["ruta"])
+    d = tidtabell.bygg_dag(ZIP, dag, omr.conf["typer"], omr.conf["ruta"], omr.conf.get("bara"))
     with gzip.open(cache, "wt", encoding="utf-8") as f:
         json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
     # dag-<område>-ÅÅÅÅ-MM-DD.json.gz; äldre än i förrgår tas bort.

@@ -12,10 +12,11 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 # Höjs när bygg_dag ändras, så att servern inte använder en gammal dagsfil.
-VERSION = 2
+VERSION = 3
 SPARVAGN = {"0"} | {str(t) for t in range(900, 907)}
 BUSS = {"3"} | {str(t) for t in range(700, 717)}
 TAG = {"2"} | {str(t) for t in range(100, 118)}
+BAT = {"4"} | {str(t) for t in range(1000, 1022)} | {"1200"}
 # Tågen heter "TÅG" i tidtabellen; tågbolaget skiljer dem åt.
 TAGNAMN = {"Västtågen": "Tåg", "Öresundståg": "Öresund"}
 
@@ -24,11 +25,15 @@ def linjenamn(route):
     """Linjens namn på kartan: linjenumret, och för tåg tågbolaget."""
     if route["route_type"] in TAG and route["route_short_name"] in ("", "TÅG"):
         return TAGNAMN.get(route.get("route_long_name", ""), "Tåg")
+    # Färjorna heter "BÅT" och skiljs åt av sitt långa namn, som Hönöfärjan.
+    if route["route_type"] in BAT and route["route_short_name"] in ("", "BÅT"):
+        return route.get("route_long_name") or "Båt"
     return route["route_short_name"]
 
 
 def fordonstyp(route_type):
-    return "sparvagn" if route_type in SPARVAGN else "tag" if route_type in TAG else "buss"
+    return ("sparvagn" if route_type in SPARVAGN else "tag" if route_type in TAG
+            else "bat" if route_type in BAT else "buss")
 VECKODAG = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 # Lokala meter runt Göteborg, räcker för avstånd inom staden.
@@ -72,20 +77,22 @@ def _tjanster(z, d):
     return aktiva
 
 
-def bygg_dag(zip_path, dag, typer=SPARVAGN, ruta=None):
+def bygg_dag(zip_path, dag, typer=SPARVAGN, ruta=None, bara=None):
     """Dagens turer av de valda slagen, med hållplatser, tider, avstånd längs spåret och form.
 
     Med ruta (syd, väst, nord, öst) tas bara turer som stannar inom rutan, även
     de som bara stannar en gång där (tåg och expressbussar), så att de syns på
     avgångstavlan. Turen behåller alla sina hållplatser, så att slutstationen
-    syns, men "inne" säger vilka som ligger inom rutan.
+    syns, men "inne" säger vilka som ligger inom rutan. bara(linjenamn, typ)
+    väljer linjer, när området inte ska ha alla av sina slag.
 
     Returnerar {"dag", "version", "turer", "former", "stationer", "typer"} där varje tur är
     {"linje", "mot", "skylt", "form", "stopp": [(namn, ankomst, avgång, avstånd)], "inne": [bool]}.
     """
     z = zipfile.ZipFile(zip_path)
     feed = next(_rader(z, "feed_info.txt"), {}) if "feed_info.txt" in z.namelist() else {}
-    routes = {r["route_id"]: r for r in _rader(z, "routes.txt") if r["route_type"] in typer}
+    routes = {r["route_id"]: r for r in _rader(z, "routes.txt") if r["route_type"] in typer
+              and (bara is None or bara(linjenamn(r), fordonstyp(r["route_type"])))}
     linje = {rid: linjenamn(r) for rid, r in routes.items()}
     typ = {linje[rid]: fordonstyp(r["route_type"]) for rid, r in routes.items()}
     idag, igar = _tjanster(z, dag), _tjanster(z, dag - timedelta(days=1))

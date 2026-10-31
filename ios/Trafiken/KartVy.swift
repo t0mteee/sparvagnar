@@ -58,6 +58,12 @@ private struct StatiskKarta: View {
         let vy = app.vy, tema = app.tema, natt = app.natt, markerad = app.markerad
         let tysta = app.tystaStreck, karta = app.karta, dag = app.dag
         let goteborg = app.omrade == "goteborg"
+        // Filtret: med något gömt syns bara de valda linjerna, inte heller linjer
+        // som inte kör idag, och bara hållplatser där någon av dem stannar.
+        let filter = app.filter
+        let valda: Set<String>? = filter.nagot ? Set(dag?.linjer.filter(filter.syns).map(\.namn) ?? []) : nil
+        let gomd = { (linje: String) in valda.map { !$0.contains(linje) } ?? false }
+        let gomdaHpl = valda == nil ? [] : Set((dag?.stationer.map(\.namn) ?? []).filter { n in dag.map { filter.gomd(hallplats: n, i: $0) } ?? false })
         Canvas { ctx, size in
             guard let karta, let dag else { return }
             var c = ctx
@@ -67,7 +73,7 @@ private struct StatiskKarta: View {
             let tyst = { (namn: String) in namn.isEmpty || dag.stannar.contains(namn) ? 1.0 : 0.28 }
 
             // Linjerna, med kanter, i transitmaps ordning.
-            for (i, s) in karta.streck.enumerated() where s.ruta.intersects(synligt) {
+            for (i, s) in karta.streck.enumerated() where s.ruta.intersects(synligt) && !gomd(s.linje) {
                 var alfa = tysta.contains(i) ? 0.28 : 1
                 if let m = markerad, s.linje != m { alfa = 0.13 }
                 var farg = s.farg, bredd = s.bredd
@@ -82,12 +88,12 @@ private struct StatiskKarta: View {
             }
 
             // Hållplatserna: band tvärs över knippet och en prick per linje.
-            for b in karta.band where synligt.contains(b.a) {
+            for b in karta.band where synligt.contains(b.a) && !gomdaHpl.contains(b.namn) {
                 c.opacity = markerad == nil ? tyst(b.namn) : 0.5
                 let p = Path { $0.move(to: b.a); $0.addLine(to: b.b) }
                 c.stroke(p, with: .color(b.kant ? tema.prickKant : tema.prick), style: StrokeStyle(lineWidth: b.bredd, lineCap: .round))
             }
-            for p in karta.prickar where synligt.contains(p.p) {
+            for p in karta.prickar where synligt.contains(p.p) && !gomd(p.linje) {
                 c.opacity = markerad.map { $0 == p.linje ? 1 : 0.13 } ?? tyst(p.namn)
                 let cirkel = Path(ellipseIn: CGRect(x: p.p.x - p.r, y: p.p.y - p.r, width: 2 * p.r, height: 2 * p.r))
                 c.fill(cirkel, with: .color(tema.prick))
@@ -96,11 +102,11 @@ private struct StatiskKarta: View {
 
             // De stora bytespunkterna.
             c.opacity = 1
-            for k in karta.kapslar {
+            for k in karta.kapslar where !gomdaHpl.contains(k.namn) {
                 let p = Path { $0.move(to: k.a); $0.addLine(to: k.b) }
                 c.stroke(p, with: .color(k.kant ? tema.prickKant : tema.prick), style: StrokeStyle(lineWidth: k.bredd, lineCap: .round))
             }
-            for k in karta.knutar where synligt.insetBy(dx: -k.r, dy: -k.r).contains(k.p) {
+            for k in karta.knutar where synligt.insetBy(dx: -k.r, dy: -k.r).contains(k.p) && !gomdaHpl.contains(k.namn) {
                 let cirkel = Path(ellipseIn: CGRect(x: k.p.x - k.r, y: k.p.y - k.r, width: 2 * k.r, height: 2 * k.r))
                 c.fill(cirkel, with: .color(tema.prick))
                 c.stroke(cirkel, with: .color(tema.prickKant), lineWidth: 1.4)
@@ -110,7 +116,7 @@ private struct StatiskKarta: View {
             c.drawLayer { lager in
                 lager.addFilter(.shadow(color: tema.bg, radius: 1.2))
                 lager.addFilter(.shadow(color: tema.bg, radius: 1.2))
-                for n in karta.namn where n.storlek * vy.k >= 6 && synligt.insetBy(dx: -120, dy: -40).contains(n.p) {
+                for n in karta.namn where n.storlek * vy.k >= 6 && synligt.insetBy(dx: -120, dy: -40).contains(n.p) && !gomdaHpl.contains(n.namn) {
                     lager.opacity = tyst(n.namn)
                     let ax: Double = n.ankare == "end" ? 1 : n.ankare == "middle" ? 0.5 : 0
                     let font = Font.system(size: n.storlek, weight: n.knut ? .bold : .semibold).width(.condensed)
@@ -225,6 +231,7 @@ private struct Form {
         case .sparvagn: return Form(moduler: 3, min: 48, skala: 38, fram: 1.3, bak: 1)
         case .buss: return Form(moduler: 1, min: 24, skala: 17, fram: 0.9, bak: 0.6)
         case .tag: return Form(moduler: 4, min: 66, skala: 56, fram: 1.7, bak: 1.7)
+        case .bat: return Form(moduler: 1, min: 30, skala: 24, fram: 2.6, bak: 0.5)
         }
     }
 }

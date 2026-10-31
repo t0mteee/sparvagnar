@@ -47,6 +47,8 @@ def skriv(f, behall):
 
 
 linje = {r["route_id"]: r["route_short_name"] for r in rader("routes.txt")}
+# X och 13 är spårvagnarnas; bussar med samma nummer i andra städer ritas.
+UTAN = {linje[r["route_id"]] for r in rader("routes.txt") if r["route_short_name"] in UTAN and r["route_type"] in ("0", "900")}
 turer = {r["trip_id"]: (linje[r["route_id"]], r["service_id"]) for r in rader("trips.txt")}
 stopp = {r["stop_id"]: r for r in rader("stops.txt")}
 

@@ -145,8 +145,8 @@ struct OmradeVal: Hashable {
     let namn: String
 }
 
-enum Fordonstyp: String {
-    case sparvagn, buss, tag
+enum Fordonstyp: String, CaseIterable {
+    case sparvagn, buss, tag, bat
 }
 
 struct Linje {
@@ -217,6 +217,8 @@ final class Dag {
     let tysta: [String]
     /// Varje linjes utbredning på kartan, för att visa hela linjen.
     let linjeRuta: [String: CGRect]
+    /// Linjerna som stannar vid varje hållplats idag, för filtret.
+    let hplLinjer: [String: Set<String>]
 
     init(_ j: DagJSON, omrade: String) {
         let linjer = j.linjer.map { l in
@@ -240,12 +242,14 @@ final class Dag {
 
         var avgangar: [String: [(tur: Int, i: Int)]] = [:]
         var korda = Set<String>(), stannar = Set<String>()
+        var hplLinjer: [String: Set<String>] = [:]
         var rutor: [String: CGRect] = [:]
         for tur in turer {
             let l = linjer[tur.linje].namn
             for (i, n) in tur.stopp.enumerated() {
                 let namn_ = j.namn[n]
                 stannar.insert(namn_)
+                hplLinjer[namn_, default: []].insert(l)
                 if i > 0 { korda.insert("\(l)|\(j.namn[tur.stopp[i - 1]])|\(namn_)") }
                 if i < tur.stopp.count - 1 { avgangar[namn_, default: []].append((tur: tur.index, i: i)) }
             }
@@ -274,17 +278,21 @@ final class Dag {
         self.korda = korda
         self.stannar = stannar
         linjeRuta = rutor
+        self.hplLinjer = hplLinjer
         tysta = Set(stationer.map(\.namn)).filter { !stannar.contains($0) && !$0.contains("Vändslinga") }.sorted()
     }
 
     func linje(_ namn: String) -> Linje? { linjer.first { $0.namn == namn } }
 
-    /// Vad fordonen heter i området: "spårvagnar", "bussar och tåg" eller "bussar".
+    /// Vad fordonen heter i området: "spårvagnar", "bussar och tåg" eller "bussar, tåg och båtar".
     var ord: (ental: String, flera: String) {
-        let typer = Set(linjer.map(\.typ))
-        if typer.contains(.sparvagn) { return ("spårvagn", "spårvagnar") }
-        if typer.contains(.tag) { return ("buss eller tåg", "bussar och tåg") }
-        return ("buss", "bussar")
+        let typer = Fordonstyp.allCases.filter { t in linjer.contains { $0.typ == t } }
+        let ental = typer.map { ["spårvagn", "buss", "tåg", "båt"][Fordonstyp.allCases.firstIndex(of: $0)!] }
+        let flera = typer.map { $0.ordFlera.lowercased() }
+        func lista(_ o: [String], _ och: String) -> String {
+            o.count < 2 ? o.joined() : o.dropLast().joined(separator: ", ") + " \(och) " + o.last!
+        }
+        return (lista(ental, "eller"), lista(flera, "och"))
     }
 }
 
@@ -348,9 +356,9 @@ final class Karta {
         return ruta
     }
 
-    /// Den stora bytespunkten, där kartan börjar.
+    /// Där kartan börjar: Brunnsparken i Göteborg, annars den största bytespunkten.
     var mitt: CGPoint {
-        if let k = knutar.first { return k.p }
+        if let k = knutar.first(where: { $0.namn == "Brunnsparken" }) ?? knutar.max(by: { $0.r < $1.r }) { return k.p }
         if let k = kapslar.first { return k.a }
         return CGPoint(x: storlek.width / 2, y: storlek.height / 2)
     }

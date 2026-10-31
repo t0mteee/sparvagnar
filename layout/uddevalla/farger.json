@@ -1,0 +1,178 @@
+{
+ "1": {
+  "backgroundColor": "#e6a100",
+  "foregroundColor": "#0b1016"
+ },
+ "2": {
+  "backgroundColor": "#3cb44b",
+  "foregroundColor": "#ffffff"
+ },
+ "3": {
+  "backgroundColor": "#911eb4",
+  "foregroundColor": "#ffffff"
+ },
+ "331": {
+  "backgroundColor": "#ffe119",
+  "foregroundColor": "#0b1016"
+ },
+ "332": {
+  "backgroundColor": "#808000",
+  "foregroundColor": "#ffffff"
+ },
+ "372": {
+  "backgroundColor": "#42d4f4",
+  "foregroundColor": "#0b1016"
+ },
+ "375": {
+  "backgroundColor": "#4363d8",
+  "foregroundColor": "#ffffff"
+ },
+ "376": {
+  "backgroundColor": "#911eb4",
+  "foregroundColor": "#ffffff"
+ },
+ "377": {
+  "backgroundColor": "#3cb44b",
+  "foregroundColor": "#ffffff"
+ },
+ "378": {
+  "backgroundColor": "#bfef45",
+  "foregroundColor": "#0b1016"
+ },
+ "379": {
+  "backgroundColor": "#f032e6",
+  "foregroundColor": "#ffffff"
+ },
+ "4": {
+  "backgroundColor": "#e6194b",
+  "foregroundColor": "#ffffff"
+ },
+ "5": {
+  "backgroundColor": "#4363d8",
+  "foregroundColor": "#ffffff"
+ },
+ "670": {
+  "backgroundColor": "#4363d8",
+  "foregroundColor": "#ffffff"
+ },
+ "679": {
+  "backgroundColor": "#9a6324",
+  "foregroundColor": "#ffffff"
+ },
+ "680": {
+  "backgroundColor": "#e6a100",
+  "foregroundColor": "#0b1016"
+ },
+ "730": {
+  "backgroundColor": "#3cb44b",
+  "foregroundColor": "#ffffff"
+ },
+ "737": {
+  "backgroundColor": "#f032e6",
+  "foregroundColor": "#ffffff"
+ },
+ "738": {
+  "backgroundColor": "#f58231",
+  "foregroundColor": "#0b1016"
+ },
+ "739": {
+  "backgroundColor": "#469990",
+  "foregroundColor": "#ffffff"
+ },
+ "810": {
+  "backgroundColor": "#f58231",
+  "foregroundColor": "#0b1016"
+ },
+ "821": {
+  "backgroundColor": "#42d4f4",
+  "foregroundColor": "#0b1016"
+ },
+ "822": {
+  "backgroundColor": "#800000",
+  "foregroundColor": "#ffffff"
+ },
+ "824": {
+  "backgroundColor": "#bfef45",
+  "foregroundColor": "#0b1016"
+ },
+ "830": {
+  "backgroundColor": "#9a6324",
+  "foregroundColor": "#ffffff"
+ },
+ "831": {
+  "backgroundColor": "#800000",
+  "foregroundColor": "#ffffff"
+ },
+ "833": {
+  "backgroundColor": "#469990",
+  "foregroundColor": "#ffffff"
+ },
+ "834": {
+  "backgroundColor": "#e6a100",
+  "foregroundColor": "#0b1016"
+ },
+ "835": {
+  "backgroundColor": "#bfef45",
+  "foregroundColor": "#0b1016"
+ },
+ "836": {
+  "backgroundColor": "#469990",
+  "foregroundColor": "#ffffff"
+ },
+ "839": {
+  "backgroundColor": "#808000",
+  "foregroundColor": "#ffffff"
+ },
+ "840": {
+  "backgroundColor": "#808000",
+  "foregroundColor": "#ffffff"
+ },
+ "841": {
+  "backgroundColor": "#9a6324",
+  "foregroundColor": "#ffffff"
+ },
+ "845": {
+  "backgroundColor": "#ffe119",
+  "foregroundColor": "#0b1016"
+ },
+ "850": {
+  "backgroundColor": "#911eb4",
+  "foregroundColor": "#ffffff"
+ },
+ "856": {
+  "backgroundColor": "#e6194b",
+  "foregroundColor": "#ffffff"
+ },
+ "858": {
+  "backgroundColor": "#f58231",
+  "foregroundColor": "#0b1016"
+ },
+ "860": {
+  "backgroundColor": "#f032e6",
+  "foregroundColor": "#ffffff"
+ },
+ "870": {
+  "backgroundColor": "#42d4f4",
+  "foregroundColor": "#0b1016"
+ },
+ "871": {
+  "backgroundColor": "#800000",
+  "foregroundColor": "#ffffff"
+ },
+ "875": {
+  "backgroundColor": "#e6194b",
+  "foregroundColor": "#ffffff"
+ },
+ "883": {
+  "backgroundColor": "#ffe119",
+  "foregroundColor": "#0b1016"
+ },
+ "OEXP": {
+  "backgroundColor": "#e6194b",
+  "foregroundColor": "#ffffff"
+ },
+ "Tåg": {
+  "backgroundColor": "#1f3a93",
+  "foregroundColor": "#ffffff"
+ }
+}
