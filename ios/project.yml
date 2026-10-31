@@ -23,7 +23,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(TRAFIKEN_BUNDLE_ID)
         INFOPLIST_FILE: Konfig/Info.plist
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Trafiken
+        INFOPLIST_KEY_CFBundleDisplayName: Vagnkollen
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight

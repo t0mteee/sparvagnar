@@ -464,7 +464,7 @@ final class AppModell {
                 guard let self else { return }
                 switch svar {
                 case .failure:
-                    self.platsMeddelande = "Appen får inte veta var du är. Det går att ändra under Inställningar, Trafiken, Plats."
+                    self.platsMeddelande = "Appen får inte veta var du är. Det går att ändra under Inställningar, Vagnkollen, Plats."
                 case .success(let p):
                     await self.hittad(p)
                 }
