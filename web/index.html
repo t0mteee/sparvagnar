@@ -193,6 +193,44 @@ a { color: var(--signal); }
 .knapprad button { flex: 1 1 auto; }
 .primar { background: var(--signal); color: #1a1205; border-color: var(--signal); }
 
+/* Reseplaneringen (resa.js) */
+#resa .titel { font-size: 21px; font-weight: 600; padding-right: 44px; }
+#resa .titel small { display: block; font-size: 14px; font-weight: 500; color: var(--muted); }
+#r-innehall { display: grid; gap: 10px; }
+.r-faltrad { display: flex; gap: 8px; align-items: center; }
+.r-falten { flex: 1; display: grid; gap: 6px; min-width: 0; }
+.r-falt { display: flex; gap: 8px; align-items: center; min-height: 40px; padding: 4px 10px; text-align: left; font-size: 17px; min-width: 0; }
+.r-falt span { flex: 0 0 34px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.r-falt b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-falt b.tomt { color: var(--muted); }
+.r-falt.aktiv { border: 1px solid var(--signal); border-radius: 8px; background: var(--knapp); }
+.r-falt input { flex: 1; min-width: 0; font: inherit; color: var(--text); background: none; border: 0; outline: 0; }
+.r-byt { width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 18px; }
+.r-traffar li { grid-template-columns: auto 1fr; }
+.r-traffar small { color: var(--muted); }
+.r-nar button[aria-pressed="true"] { background: var(--signal); color: #1a1205; border-color: var(--signal); }
+#r-tid { font: inherit; font-size: 16px; padding: 6px; color: var(--text); background: var(--knapp); border: 1px solid var(--rule); border-radius: 8px; }
+.r-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.r-lista.hamtar { opacity: 0.5; }
+.r-forslag { display: grid; gap: 6px; padding: 9px 10px; border: 1px solid var(--rule); border-radius: 10px; background: var(--knapp); cursor: pointer; }
+.r-forslag.installd { border-color: #d33; }
+.r-tider { display: flex; gap: 6px; align-items: baseline; font-family: var(--mono); font-size: 17px; }
+.r-tider s { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.r-tider span { margin-left: auto; font-family: var(--display); font-weight: 600; }
+.r-delar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.r-gang { color: var(--muted); font-size: 14px; }
+.r-pil { color: var(--muted); }
+.r-om { display: flex; gap: 6px; font-size: 14px; color: var(--muted); }
+.r-om b:last-child { margin-left: auto; }
+.r-rod { color: #e5484d; }
+.r-tillbaka { justify-self: start; color: var(--signal); }
+.r-fard { display: grid; gap: 4px; }
+.r-fardhuvud { display: flex; gap: 8px; align-items: center; font-size: 17px; }
+.r-fard .linjeband small { color: var(--muted); }
+.r-gangrad, .r-framme, .r-info { margin: 0; font-size: 16px; }
+.r-gangrad { color: var(--muted); }
+.r-info { color: var(--signal); font-size: 14px; }
+
 /* Hållplatsraden som skärmen inne i vagnen */
 .linjeband { list-style: none; margin: 0; padding: 0; display: grid; }
 .linjeband li { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; min-height: 30px; font-size: 17px; }
@@ -272,6 +310,9 @@ a { color: var(--signal); }
   </header>
 
   <nav class="ikoner" aria-label="Inställningar">
+    <button class="ikon" id="resa-knapp" aria-label="Planera en resa">
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>
+    </button>
     <button class="ikon" id="hem" aria-label="Tillbaka till centrum">
       <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7M5 9.5V20h5v-6h4v6h5V9.5"/></svg>
     </button>
@@ -296,6 +337,11 @@ a { color: var(--signal); }
     <div class="huvud" id="k-huvud"></div>
     <div id="k-innehall"></div>
     <div class="knapprad" id="k-knappar"></div>
+  </section>
+
+  <section class="panel kort" id="resa" hidden aria-live="polite" aria-label="Planera en resa">
+    <button class="stang" id="r-stang" aria-label="Stäng">✕</button>
+    <div id="r-innehall"></div>
   </section>
 
   <section class="panel styr" aria-label="Tid och linjer">
@@ -1158,7 +1204,11 @@ a { color: var(--signal); }
     }
     lista.sort((a, b) => a.avg - b.avg);
     sattHtml("k-huvud", `<div class="titel">${esc(namn)}<small>${visarLive() ? "Avgångar, live" : "Avgångar enligt tidtabellen"}</small></div>`);
-    sattHtml("k-knappar", "");
+    if (sattHtml("k-knappar", `<button id="res-harifran" data-namn="${esc(namn)}">Res härifrån</button><button id="res-hit">Res hit</button>`)) {
+      const g = (D.geo || []).find(x => D.namn[x[0]] === namn) || [];
+      $("res-harifran").onclick = () => window.Resa?.hallplats(namn, false, g[1], g[2]);
+      $("res-hit").onclick = () => window.Resa?.hallplats(namn, true, g[1], g[2]);
+    }
     const nytt = sattHtml("k-innehall", lista.length ? `<ul class="tavla">${lista.slice(0, 8).map((a, n) =>
       `<li data-n="${n}">${bricka(linjer[a.tur.linje], true)}<span class="mot">${esc(D.namn[a.tur.mot])}</span>`
       + `<span class="om${a.avg - t < 60 ? " nu" : ""}">${a.avg - t > 1200 ? tid(a.avg) : omMin(a.avg, t)}${a.f > 120 ? ` <span class="sen">+${Math.round(a.f / 60)}</span>` : ""}</span></li>`).join("")}</ul>`
@@ -1367,5 +1417,6 @@ a { color: var(--signal); }
   storlek(); knappar(); hamtaLive(); requestAnimationFrame(rita);
 })();
 </script>
+<script src="resa.js"></script>
 </body>
 </html>

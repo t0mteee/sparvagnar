@@ -3,10 +3,11 @@ import SwiftUI
 @main
 struct TrafikenApp: App {
     @State private var app = AppModell()
+    @State private var resplan = Resplan()
 
     var body: some Scene {
         WindowGroup {
-            Huvudvy().environment(app)
+            Huvudvy().environment(app).environment(resplan)
         }
     }
 }
@@ -108,12 +109,14 @@ private struct ToppPanel: View {
     }
 }
 
-/// Uppe till höger: tillbaka till mitten, min position, dag eller natt.
+/// Uppe till höger: resa, tillbaka till mitten, min position, dag eller natt.
 private struct Knappar: View {
     @Environment(AppModell.self) private var app
+    @Environment(Resplan.self) private var resplan
 
     var body: some View {
         VStack(spacing: 8) {
+            knapp("point.topleft.down.to.point.bottomright.curvepath.fill", "Planera en resa") { resplan.oppna(app) }
             knapp("house", "Tillbaka till mitten") { app.hem() }
             knapp("location.fill", "Min position") { app.hittaMig() }
             FilterKnapp()
@@ -272,6 +275,7 @@ struct Kort: View {
                 switch valt {
                 case .vagn(let id): VagnKort(id: id, t: t)
                 case .hallplats(let namn): Tavla(namn: namn, t: t)
+                case .resa: ResKort()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -443,6 +447,7 @@ private struct Tavla: View {
                 .foregroundStyle(app.minPosition == namn ? Color(red: 0.16, green: 0.52, blue: 1) : tema.muted)
         }
         .padding(.trailing, 36)
+        ResKnappar(namn: namn)
         if lista.isEmpty {
             Text(app.dag?.tysta.contains(namn) == true
                  ? "Inga \(app.dag?.ord.flera ?? "vagnar") stannar här idag. Därför är hållplatsen grå på kartan."

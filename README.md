@@ -95,6 +95,30 @@ Servern (`server/`) är Python med bara standardbiblioteket:
 - `omraden.py` anger områdena: vilka slags fordon, rutan de avgränsas av,
   vilka linjer och var kartan ligger.
 - `vektor.py` gör om kartan till vektordata för iOS-appen, på `/api/karta`.
+- `resa.py` planerar resor med Västtrafiks Planera Resa v4, se nedan.
+
+### Planera en resa
+
+Både sidan och appen kan planera resor som Västtrafiks egen app: välj
+varifrån (eller närmast dig), vart, och nu eller en viss tid man vill åka
+eller vara framme. Förslagen visar tider, restid, linjerna i ordning och
+byten, och ett tryck visar varje del med hållplatser, lägen och gång
+emellan. I appen ritas resan också på kartan. Knappen uppe till höger öppnar
+reseplaneringen, och hållplatsens tavla har "Res härifrån" och "Res hit".
+
+Servern går vidare till Västtrafik med samma nyckel som positionerna och
+skickar tillbaka ett förenklat svar. Nycklarna lämnar aldrig servern:
+
+- `/api/platser?q=text` söker hållplatser, adresser och platser, och
+  `/api/platser?lat=&lon=` ger hållplatserna närmast en punkt.
+- `/api/resa?fran=&till=&tid=&avser=avgang|ankomst` ger reseförslagen. `fran`
+  och `till` är ett id från `/api/platser`, `tid` är ISO 8601 och utelämnas
+  för nu.
+- `/api/resa/detaljer?ref=` ger alla hållplatser i ett förslag.
+
+Svaren cachas en kort stund (sökningar en timme, resor 30 sekunder), så att
+samma sökning bara blir ett anrop hos Västtrafik. Sidans del ligger i
+`web/resa.js`.
 
 Sidan visar varje vagn som sin tur, förskjuten med förseningen. Ändras
 förseningen glider vagnen ikapp eller stannar en stund, men backar aldrig.
