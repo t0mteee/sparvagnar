@@ -493,6 +493,8 @@ private struct ResSok: View {
 
     /// Hela resan i den övre delen av skärmen, ovanför kortet.
     private func visaPaKartan(_ f: ResForslag) {
+        // Kortet krymper, så att resan syns på kartan ovanför.
+        app.kortStort = false
         guard let r = ResLinje.ruta(f, plan: plan, dag: app.dag), app.storlek.width > 0 else { return }
         let w = app.storlek.width, bred = w >= 700
         let topp = 150.0, botten = bred ? app.storlek.height - 40 : app.storlek.height * 0.45
@@ -584,7 +586,7 @@ private struct ResDetalj: View {
     var body: some View {
         let tema = app.tema, f = forslag
         VStack(alignment: .leading, spacing: 10) {
-            Button { plan.valt = nil; plan.detaljer = nil } label: {
+            Button { plan.valt = nil; plan.detaljer = nil; app.kortStort = true } label: {
                 Label("Alla resor", systemImage: "chevron.left").font(.subheadline.weight(.semibold))
             }
             .foregroundStyle(tema.signal)

@@ -22,15 +22,19 @@ struct Huvudvy: View {
         // Bred skärm: kortet till vänster. Stor skärm: plats för både kortet och
         // dockan. Annars tar kortet dockans plats så länge det är öppet.
         let bred = yta.width >= 700, stor = bred && yta.height >= 700
+        // Medan man söker en resa tar kortet hela skärmen, på en bred skärm hela vänsterkanten.
+        let helskarm = app.valt == .resa && app.kortStort
         ZStack(alignment: .top) {
             KartVy().ignoresSafeArea()
             VStack(spacing: 8) {
-                HStack(alignment: .top) {
-                    ToppPanel()
-                    Spacer(minLength: 8)
-                    Knappar()
+                if !helskarm {
+                    HStack(alignment: .top) {
+                        ToppPanel()
+                        Spacer(minLength: 8)
+                        Knappar()
+                    }
                 }
-                if let m = app.meddelande ?? app.platsMeddelande {
+                if !helskarm, let m = app.meddelande ?? app.platsMeddelande {
                     Text(m)
                         .font(.subheadline)
                         .foregroundStyle(app.tema.text)
@@ -40,7 +44,7 @@ struct Huvudvy: View {
                 }
                 Spacer(minLength: 0)
                 if let v = app.valt {
-                    KortPanel(valt: v, maxHojd: bred && !stor ? yta.height : yta.height * (stor ? 0.55 : 0.45))
+                    KortPanel(valt: v, maxHojd: bred && !stor ? yta.height : yta.height * (stor ? 0.55 : 0.45), fyll: helskarm)
                         .frame(maxWidth: bred ? 420 : 720)
                         .frame(maxWidth: .infinity, alignment: bred ? .leading : .center)
                         .layoutPriority(1)
@@ -53,6 +57,7 @@ struct Huvudvy: View {
             .onGeometryChange(for: CGSize.self) { $0.size } action: { yta = $0 }
         }
         .animation(.snappy(duration: 0.3), value: app.valt)
+        .animation(.snappy(duration: 0.3), value: helskarm)
         .preferredColorScheme(app.natt ? .dark : .light)
         .task(id: app.omrade) { await app.ladda() }
         .task(id: app.omrade) { await app.liveLoop() }
@@ -207,19 +212,20 @@ private struct KortPanel: View {
     @Environment(AppModell.self) private var app
     let valt: Valt
     let maxHojd: Double
+    /// Fyll hela höjden, oavsett hur högt innehållet är.
+    let fyll: Bool
     @State private var innehall: Double = 200
-    @State private var stort = false
     @State private var drag: Double = 0
 
     var body: some View {
-        let tema = app.tema
+        let tema = app.tema, stort = app.kortStort
         VStack(spacing: 0) {
             Capsule()
                 .fill(tema.rule)
                 .frame(width: 36, height: 5)
                 .frame(maxWidth: .infinity, minHeight: 20)
                 .contentShape(Rectangle())
-                .onTapGesture { withAnimation(.snappy) { stort.toggle() } }
+                .onTapGesture { withAnimation(.snappy) { app.kortStort.toggle() } }
                 .gesture(greppa)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(stort ? "Mindre kort" : "Större kort")
@@ -229,7 +235,7 @@ private struct KortPanel: View {
             }
             .id(valt.id)
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: stort ? innehall : min(innehall, maxHojd))
+            .frame(maxHeight: fyll ? .infinity : stort ? innehall : min(innehall, maxHojd))
         }
         .overlay(alignment: .topTrailing) {
             Button { app.valt = nil } label: {
@@ -247,7 +253,9 @@ private struct KortPanel: View {
         .background(tema.bg, in: RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.15), radius: 10, y: 2)
         .offset(y: max(0, drag))
-        .onChange(of: valt) { stort = false }
+        // Reseplaneringen börjar uppdragen, allt annat lagom stort.
+        .onAppear { app.kortStort = valt == .resa }
+        .onChange(of: valt) { app.kortStort = valt == .resa }
     }
 
     private var greppa: some Gesture {
@@ -256,7 +264,7 @@ private struct KortPanel: View {
             .onEnded { v in
                 let dy = v.predictedEndTranslation.height
                 withAnimation(.snappy) {
-                    if dy < -60 { stort = true } else if dy > 80 { if stort { stort = false } else { app.valt = nil } }
+                    if dy < -60 { app.kortStort = true } else if dy > 80 { if app.kortStort { app.kortStort = false } else { app.valt = nil } }
                     drag = 0
                 }
             }

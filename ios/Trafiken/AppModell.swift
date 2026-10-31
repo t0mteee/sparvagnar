@@ -70,6 +70,8 @@ final class AppModell {
     var vy = Vy()
     var storlek: CGSize = .zero
     var valt: Valt?
+    /// Kortet uppdraget: så högt innehållet behöver, och reseplaneringen över hela skärmen.
+    var kortStort = false
     var markerad: String?
     var tystaStreck = Set<Int>()
     let filter = Filter()
